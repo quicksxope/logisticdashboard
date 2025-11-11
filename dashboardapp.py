@@ -52,17 +52,24 @@ st.markdown(f"""
     margin: 6px 12px;
     border-radius: 10px;
     padding: 10px 20px;
-    /* PERUBAHAN DI SINI: Warna teks diubah menjadi #fff (putih) dan ditambahkan !important */
+    /* Warna default untuk label */
     color: #fff !important; 
     transition: all 0.2s ease;
 }}
 
+/* FIX: Target semua elemen teks (span, div) di dalam label untuk memaksa warna putih */
+/* Ini adalah trik yang paling kuat untuk mengatasi penimpaan warna Streamlit */
+[data-testid="stSidebar"] [data-testid="stRadio"] label * {{
+    color: #fff !important;
+}}
+/* END FIX */
+
 /* Warna hover */
 [data-testid="stSidebar"] [data-testid="stRadio"] label:hover {{
     background-color: #1f2937;
-    /* Warna teks saat hover juga di-enforce dengan !important */
-    color: #fff !important;
+    color: #fff !important; 
 }}
+
 
 /* Target container radio circle */
 [data-testid="stSidebar"] [data-testid="stRadio"] label > div:first-child {{
