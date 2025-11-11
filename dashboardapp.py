@@ -5,86 +5,8 @@ import plotly.graph_objects as go
 # ========== PAGE CONFIG ==========
 st.set_page_config(page_title="Sistem Logistik Tambak Udang", layout="wide")
 
-# ========== CUSTOM STYLE ==========
-st.markdown("""
-<style>
-/* Sidebar styling */
-[data-testid="stSidebar"] {
-    background-color: #111827;
-    padding-top: 2rem;
-    width: 260px;
-}
-.sidebar-title {
-    color: white;
-    font-weight: bold;
-    font-size: 22px;
-    text-align: left;
-    padding-left: 15px;
-    margin-bottom: 25px;
-}
-
-/* Custom Menu */
-.menu-item {
-    display: block;
-    padding: 10px 20px;
-    margin: 6px 12px;
-    border-radius: 10px;
-    color: #d1d5db;
-    font-size: 16px;
-    font-weight: 400;
-    text-decoration: none;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-.menu-item:hover {
-    background-color: #1f2937;
-    color: #fff;
-}
-.menu-item.active {
-    background-color: #374151;
-    color: #fff;
-    font-weight: 600;
-}
-
-/* Metric cards */
-.metric-card {
-    background-color: #1F2937;
-    border-radius: 15px;
-    padding: 20px;
-    text-align: center;
-    color: white;
-    box-shadow: 0px 4px 8px rgba(0,0,0,0.2);
-}
-.metric-value {
-    font-size: 28px;
-    font-weight: bold;
-}
-.metric-label {
-    font-size: 14px;
-    color: #9CA3AF;
-}
-
-/* Table styling */
-thead tr th {
-    background-color: #374151 !important;
-    color: white !important;
-    text-align: center !important;
-}
-tbody tr td {
-    text-align: center !important;
-}
-
-/* Main background */
-.stApp {
-    background-color: #F9FAFB;
-}
-</style>
-""", unsafe_allow_html=True)
-
-
-# ========== SIDEBAR MENU ==========
-st.sidebar.markdown("<div class='sidebar-title'>🦐 Tambak Logistik</div>", unsafe_allow_html=True)
-
+# ========== CUSTOM STYLE (Disesuaikan untuk st.radio) ==========
+# Memanfaatkan Session State untuk menentukan item yang aktif
 menu_items = {
     "Dashboard": "📊 Dashboard",
     "Stok Masuk": "⬆️ Stok Masuk",
@@ -92,35 +14,121 @@ menu_items = {
     "Setting": "⚙️ Setting"
 }
 
-# Session state for active page
+# Inisialisasi session state untuk halaman aktif
 if "active_page" not in st.session_state:
     st.session_state.active_page = "Dashboard"
 
-# Render custom clickable menu
-for key, label in menu_items.items():
-    active_class = "active" if key == st.session_state.active_page else ""
-    if st.sidebar.markdown(f"<div class='menu-item {active_class}' id='{key}'>{label}</div>", unsafe_allow_html=True):
-        pass
+# CSS untuk styling custom dan override Streamlit Radio
+st.markdown(f"""
+<style>
+/* Sidebar styling */
+[data-testid="stSidebar"] {{
+    background-color: #111827;
+    padding-top: 2rem;
+    width: 260px;
+}}
+.sidebar-title {{
+    color: white;
+    font-weight: bold;
+    font-size: 22px;
+    text-align: left;
+    padding-left: 15px;
+    margin-bottom: 25px;
+}}
 
-# Simulate click behavior using buttons (hidden)
-for key in menu_items.keys():
-    if st.sidebar.button("", key=f"nav_{key}"):
-        st.session_state.active_page = key
+/* Custom Styling for Streamlit Radio Buttons to look like menu items */
+/* Menghapus padding default untuk container radio */
+[data-testid="stSidebar"] [data-testid="stForm"] > div > div > div {{
+    padding: 0 !important;
+}}
 
+/* Target setiap opsi radio */
+[data-testid="stSidebar"] [data-testid="stRadio"] label {{
+    /* Menghilangkan radio circle (Titik/Lingkaran Radio) */
+    display: flex;
+    align-items: center;
+    
+    /* Menggunakan styling .menu-item yang kamu buat */
+    margin: 6px 12px;
+    border-radius: 10px;
+    padding: 10px 20px;
+    color: #d1d5db; 
+    transition: all 0.2s ease;
+}}
 
-# Tambahkan JS kecil agar menu HTML bisa trigger tombol Streamlit (tanpa reload)
-st.markdown("""
-<script>
-const menuItems = document.querySelectorAll('.menu-item');
-menuItems.forEach(item => {
-    item.onclick = () => {
-        const key = item.id;
-        const btn = parent.document.querySelector(`[data-testid="stSidebar"] button[kind="secondary"][key="nav_${key}"]`);
-        if (btn) btn.click();
-    };
-});
-</script>
+/* Warna hover */
+[data-testid="stSidebar"] [data-testid="stRadio"] label:hover {{
+    background-color: #1f2937;
+    color: #fff;
+}}
+
+/* Target container radio circle */
+[data-testid="stSidebar"] [data-testid="stRadio"] label > div:first-child {{
+    display: none !important; /* Hilangkan radio circle sepenuhnya */
+}}
+
+/* Gaya untuk opsi yang aktif (terpilih) */
+[data-testid="stSidebar"] [data-testid="stRadio"] label.st-emotion-cache-1bvk7l-container:has(input[aria-checked="true"]) {{
+    background-color: #374151; /* Warna aktif */
+    color: #fff;
+    font-weight: 600;
+}}
+
+/* Metric cards */
+.metric-card {{
+    background-color: #1F2937;
+    border-radius: 15px;
+    padding: 20px;
+    text-align: center;
+    color: white;
+    box-shadow: 0px 4px 8px rgba(0,0,0,0.2);
+}}
+.metric-value {{
+    font-size: 28px;
+    font-weight: bold;
+}}
+.metric-label {{
+    font-size: 14px;
+    color: #9CA3AF;
+}}
+
+/* Table styling */
+thead tr th {{
+    background-color: #374151 !important;
+    color: white !important;
+    text-align: center !important;
+}}
+tbody tr td {{
+    text-align: center !important;
+}}
+
+/* Main background */
+.stApp {{
+    background-color: #F9FAFB;
+}}
+</style>
 """, unsafe_allow_html=True)
+
+
+# ========== SIDEBAR MENU (FIXED) ==========
+st.sidebar.markdown("<div class='sidebar-title'>🦐 Tambak Logistik</div>", unsafe_allow_html=True)
+
+# List kunci untuk opsi radio
+menu_keys = list(menu_items.keys())
+
+# Menggunakan st.sidebar.radio untuk navigasi yang berfungsi penuh
+# format_func digunakan untuk menampilkan label dengan ikon (e.g., "📊 Dashboard")
+# key memastikan state navigasi tersimpan
+selected_page = st.sidebar.radio(
+    "Navigasi", # Label ini disembunyikan oleh CSS
+    options=menu_keys,
+    index=menu_keys.index(st.session_state.active_page),
+    format_func=lambda key: menu_items[key],
+    key='app_navigation_radio'
+)
+
+# Sinkronisasi Session State dengan pilihan radio
+st.session_state.active_page = selected_page
 
 
 # ========== DUMMY DATA ==========
@@ -133,7 +141,7 @@ shipment_data = pd.DataFrame({
 })
 
 
-# ========== HALAMAN DASHBOARD ==========
+# ========== TAMPILKAN KONTEN BERDASARKAN HALAMAN AKTIF ==========
 if st.session_state.active_page == "Dashboard":
     st.title("📊 Dashboard Logistik Tambak Udang")
     st.write("Selamat datang kembali, Bayu 👋")
@@ -151,13 +159,13 @@ if st.session_state.active_page == "Dashboard":
     st.markdown("### 📈 Statistik Pengiriman")
     shipment_stats = go.Figure()
     shipment_stats.add_trace(go.Scatter(x=["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep"],
-                                        y=[30, 40, 45, 50, 65, 70, 80, 81, 90],
-                                        name="Total Shipment",
-                                        line=dict(color="#636EFA", width=3)))
+                                         y=[30, 40, 45, 50, 65, 70, 80, 81, 90],
+                                         name="Total Shipment",
+                                         line=dict(color="#636EFA", width=3)))
     shipment_stats.add_trace(go.Scatter(x=["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep"],
-                                        y=[20, 25, 35, 40, 55, 65, 70, 78, 85],
-                                        name="Delivery Shipment",
-                                        line=dict(color="#00CC96", width=3)))
+                                         y=[20, 25, 35, 40, 55, 65, 70, 78, 85],
+                                         name="Delivery Shipment",
+                                         line=dict(color="#00CC96", width=3)))
     shipment_stats.update_layout(template="plotly_white", height=350, margin=dict(l=0, r=0, t=30, b=0))
     st.plotly_chart(shipment_stats, use_container_width=True)
 
