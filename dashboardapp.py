@@ -52,16 +52,16 @@ st.markdown(f"""
     margin: 6px 12px;
     border-radius: 10px;
     padding: 10px 20px;
-    /* PERUBAHAN DI SINI: Warna teks diubah dari #d1d5db menjadi #fff (putih) */
-    color: #fff; 
+    /* PERUBAHAN DI SINI: Warna teks diubah menjadi #fff (putih) dan ditambahkan !important */
+    color: #fff !important; 
     transition: all 0.2s ease;
 }}
 
 /* Warna hover */
 [data-testid="stSidebar"] [data-testid="stRadio"] label:hover {{
     background-color: #1f2937;
-    /* Warna teks saat hover sudah #fff, tetap dipertahankan */
-    color: #fff;
+    /* Warna teks saat hover juga di-enforce dengan !important */
+    color: #fff !important;
 }}
 
 /* Target container radio circle */
@@ -72,7 +72,7 @@ st.markdown(f"""
 /* Gaya untuk opsi yang aktif (terpilih) */
 [data-testid="stSidebar"] [data-testid="stRadio"] label.st-emotion-cache-1bvk7l-container:has(input[aria-checked="true"]) {{
     background-color: #374151; /* Warna aktif */
-    color: #fff;
+    color: #fff !important; /* Di-enforce juga di sini dengan !important */
     font-weight: 600;
 }}
 
