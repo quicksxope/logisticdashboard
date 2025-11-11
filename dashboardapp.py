@@ -52,13 +52,15 @@ st.markdown(f"""
     margin: 6px 12px;
     border-radius: 10px;
     padding: 10px 20px;
-    color: #d1d5db; 
+    /* PERUBAHAN DI SINI: Warna teks diubah dari #d1d5db menjadi #fff (putih) */
+    color: #fff; 
     transition: all 0.2s ease;
 }}
 
 /* Warna hover */
 [data-testid="stSidebar"] [data-testid="stRadio"] label:hover {{
     background-color: #1f2937;
+    /* Warna teks saat hover sudah #fff, tetap dipertahankan */
     color: #fff;
 }}
 
