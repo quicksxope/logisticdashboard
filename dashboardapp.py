@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 # Import untuk Google Sheets (perlu instalasi: pip install st-gsheets-connection)
-from streamlit_gsheets import GSheetsConnection
+from streamlit_gsheets_connection import GSheetsConnection
 
 # ========== PAGE CONFIG ==========
 st.set_page_config(page_title="Sistem Logistik Tambak Udang", layout="wide")
