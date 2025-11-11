@@ -34,6 +34,7 @@ st.markdown("""
     font-weight: 400;
     text-decoration: none;
     cursor: pointer;
+    transition: all 0.2s ease;
 }
 .menu-item:hover {
     background-color: #1f2937;
@@ -80,6 +81,7 @@ tbody tr td {
 </style>
 """, unsafe_allow_html=True)
 
+
 # ========== SIDEBAR MENU ==========
 st.sidebar.markdown("<div class='sidebar-title'>🦐 Tambak Logistik</div>", unsafe_allow_html=True)
 
@@ -90,27 +92,35 @@ menu_items = {
     "Setting": "⚙️ Setting"
 }
 
-# session state for active page
+# Session state for active page
 if "active_page" not in st.session_state:
     st.session_state.active_page = "Dashboard"
 
-# tampilkan sidebar menu
+# Render custom clickable menu
 for key, label in menu_items.items():
     active_class = "active" if key == st.session_state.active_page else ""
-    if st.sidebar.markdown(
-        f"<div class='menu-item {active_class}' onclick=\"window.location.reload();\">{label}</div>",
-        unsafe_allow_html=True,
-    ):
+    if st.sidebar.markdown(f"<div class='menu-item {active_class}' id='{key}'>{label}</div>", unsafe_allow_html=True):
+        pass
+
+# Simulate click behavior using buttons (hidden)
+for key in menu_items.keys():
+    if st.sidebar.button("", key=f"nav_{key}"):
         st.session_state.active_page = key
 
-# tombol seleksi logika dengan radio (supaya click benar-benar ganti halaman)
-selected = st.sidebar.radio(
-    "",
-    list(menu_items.keys()),
-    index=list(menu_items.keys()).index(st.session_state.active_page),
-    label_visibility="collapsed"
-)
-st.session_state.active_page = selected
+
+# Tambahkan JS kecil agar menu HTML bisa trigger tombol Streamlit (tanpa reload)
+st.markdown("""
+<script>
+const menuItems = document.querySelectorAll('.menu-item');
+menuItems.forEach(item => {
+    item.onclick = () => {
+        const key = item.id;
+        const btn = parent.document.querySelector(`[data-testid="stSidebar"] button[kind="secondary"][key="nav_${key}"]`);
+        if (btn) btn.click();
+    };
+});
+</script>
+""", unsafe_allow_html=True)
 
 
 # ========== DUMMY DATA ==========
@@ -121,6 +131,7 @@ shipment_data = pd.DataFrame({
     "Date": ["2025-10-12", "2025-10-15", "2025-10-18", "2025-10-19", "2025-10-20"],
     "Status": ["On Delivery", "Complete", "Pending", "On Delivery", "Pending"]
 })
+
 
 # ========== HALAMAN DASHBOARD ==========
 if st.session_state.active_page == "Dashboard":
@@ -153,6 +164,7 @@ if st.session_state.active_page == "Dashboard":
     st.markdown("### 🚚 Daftar Pengiriman Barang")
     st.dataframe(shipment_data, use_container_width=True, hide_index=True)
 
+
 # ========== HALAMAN STOK MASUK ==========
 elif st.session_state.active_page == "Stok Masuk":
     st.title("⬆️ Input Stok Masuk")
@@ -164,6 +176,7 @@ elif st.session_state.active_page == "Stok Masuk":
     if submitted:
         st.success(f"✅ Data stok masuk '{jenis}' sejumlah {jumlah} berhasil disimpan!")
 
+
 # ========== HALAMAN STOK KELUAR ==========
 elif st.session_state.active_page == "Stok Keluar":
     st.title("⬇️ Input Stok Keluar")
@@ -174,6 +187,7 @@ elif st.session_state.active_page == "Stok Keluar":
         submitted = st.form_submit_button("Simpan")
     if submitted:
         st.success(f"✅ Data stok keluar '{jenis}' sejumlah {jumlah} berhasil disimpan!")
+
 
 # ========== HALAMAN SETTING ==========
 elif st.session_state.active_page == "Setting":
