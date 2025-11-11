@@ -12,15 +12,36 @@ st.markdown("""
 [data-testid="stSidebar"] {
     background-color: #111827;
     padding-top: 2rem;
-}
-[data-testid="stSidebar"] h2, [data-testid="stSidebar"] p, [data-testid="stSidebar"] li, [data-testid="stSidebar"] div {
-    color: #E5E7EB !important;
+    width: 260px;
 }
 .sidebar-title {
     color: white;
     font-weight: bold;
-    font-size: 20px;
-    text-align: center;
+    font-size: 22px;
+    text-align: left;
+    padding-left: 15px;
+    margin-bottom: 25px;
+}
+
+/* Custom Menu */
+.menu-item {
+    display: block;
+    padding: 10px 20px;
+    margin: 6px 12px;
+    border-radius: 10px;
+    color: #d1d5db;
+    font-size: 16px;
+    font-weight: 400;
+    text-decoration: none;
+}
+.menu-item:hover {
+    background-color: #1f2937;
+    color: #fff;
+}
+.menu-item.active {
+    background-color: #374151;
+    color: #fff;
+    font-weight: 600;
 }
 
 /* Metric cards */
@@ -58,9 +79,26 @@ tbody tr td {
 </style>
 """, unsafe_allow_html=True)
 
-# ========== SIDEBAR ==========
-st.sidebar.markdown("<h2 class='sidebar-title'>🦐 Tambak Logistik</h2>", unsafe_allow_html=True)
-menu = st.sidebar.radio("Navigasi", ["📊 Dashboard", "⬆️ Stok Masuk", "⬇️ Stok Keluar", "⚙️ Setting"])
+# ========== SIDEBAR MENU ==========
+st.sidebar.markdown("<div class='sidebar-title'>🦐 Tambak Logistik</div>", unsafe_allow_html=True)
+
+menu_items = {
+    "Dashboard": "📊 Dashboard",
+    "Stok Masuk": "⬆️ Stok Masuk",
+    "Stok Keluar": "⬇️ Stok Keluar",
+    "Setting": "⚙️ Setting"
+}
+
+# session state for active page
+if "active_page" not in st.session_state:
+    st.session_state.active_page = "Dashboard"
+
+# tampilkan sidebar menu
+for key, label in menu_items.items():
+    active_class = "active" if key == st.session_state.active_page else ""
+    if st.sidebar.button(label, key=key):
+        st.session_state.active_page = key
+    st.sidebar.markdown(f"<div class='menu-item {active_class}'>{label}</div>", unsafe_allow_html=True)
 
 # ========== DUMMY DATA ==========
 shipment_data = pd.DataFrame({
@@ -71,8 +109,8 @@ shipment_data = pd.DataFrame({
     "Status": ["On Delivery", "Complete", "Pending", "On Delivery", "Pending"]
 })
 
-# ========== DASHBOARD ==========
-if menu == "📊 Dashboard":
+# ========== HALAMAN DASHBOARD ==========
+if st.session_state.active_page == "Dashboard":
     st.title("📊 Dashboard Logistik Tambak Udang")
     st.write("Selamat datang kembali, Bayu 👋")
 
@@ -102,8 +140,8 @@ if menu == "📊 Dashboard":
     st.markdown("### 🚚 Daftar Pengiriman Barang")
     st.dataframe(shipment_data, use_container_width=True, hide_index=True)
 
-# ========== STOK MASUK ==========
-elif menu == "⬆️ Stok Masuk":
+# ========== HALAMAN STOK MASUK ==========
+elif st.session_state.active_page == "Stok Masuk":
     st.title("⬆️ Input Stok Masuk")
     with st.form("form_masuk"):
         jenis = st.text_input("Jenis Barang")
@@ -113,8 +151,8 @@ elif menu == "⬆️ Stok Masuk":
     if submitted:
         st.success(f"✅ Data stok masuk '{jenis}' sejumlah {jumlah} berhasil disimpan!")
 
-# ========== STOK KELUAR ==========
-elif menu == "⬇️ Stok Keluar":
+# ========== HALAMAN STOK KELUAR ==========
+elif st.session_state.active_page == "Stok Keluar":
     st.title("⬇️ Input Stok Keluar")
     with st.form("form_keluar"):
         jenis = st.text_input("Jenis Barang")
@@ -124,7 +162,7 @@ elif menu == "⬇️ Stok Keluar":
     if submitted:
         st.success(f"✅ Data stok keluar '{jenis}' sejumlah {jumlah} berhasil disimpan!")
 
-# ========== SETTINGS ==========
-elif menu == "⚙️ Setting":
+# ========== HALAMAN SETTING ==========
+elif st.session_state.active_page == "Setting":
     st.title("⚙️ Pengaturan Sistem")
     st.write("Tempat untuk konfigurasi API Key, database, dan backup data.")
