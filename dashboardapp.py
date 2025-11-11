@@ -33,6 +33,7 @@ st.markdown("""
     font-size: 16px;
     font-weight: 400;
     text-decoration: none;
+    cursor: pointer;
 }
 .menu-item:hover {
     background-color: #1f2937;
@@ -96,9 +97,21 @@ if "active_page" not in st.session_state:
 # tampilkan sidebar menu
 for key, label in menu_items.items():
     active_class = "active" if key == st.session_state.active_page else ""
-    if st.sidebar.button(label, key=key):
+    if st.sidebar.markdown(
+        f"<div class='menu-item {active_class}' onclick=\"window.location.reload();\">{label}</div>",
+        unsafe_allow_html=True,
+    ):
         st.session_state.active_page = key
-    st.sidebar.markdown(f"<div class='menu-item {active_class}'>{label}</div>", unsafe_allow_html=True)
+
+# tombol seleksi logika dengan radio (supaya click benar-benar ganti halaman)
+selected = st.sidebar.radio(
+    "",
+    list(menu_items.keys()),
+    index=list(menu_items.keys()).index(st.session_state.active_page),
+    label_visibility="collapsed"
+)
+st.session_state.active_page = selected
+
 
 # ========== DUMMY DATA ==========
 shipment_data = pd.DataFrame({
