@@ -225,15 +225,15 @@ elif st.session_state.active_page == "Stok Keluar":
 # ===============================================
 elif st.session_state.active_page == "Purchase Request":
     st.title("📝 Input Purchase Request")
-    st.write("Silakan input setiap item barang satu per satu. **Nomor PR harus diinput bersama setiap item** dan semua item harus memiliki nomor PR yang sama saat disubmit.")
+    st.write("Silakan input setiap item barang satu per satu. Nomor PR diisi per item, dan diulang saat konfirmasi final.")
 
     # --- 1. Form Item Barang (Input Per Barang) ---
     with st.expander("➕ Tambah Item Baru", expanded=True):
         with st.form("form_add_item", clear_on_submit=True):
             st.markdown("### Detail Item yang Dibutuhkan")
             
-            # PERUBAHAN DISINI: Nomor PR diinput di detail item
-            pr_number_item = st.text_input("Nomor PR (Manual)*", key="item_pr_number", help="Masukkan nomor PR yang akan menyatukan item ini.")
+            # Nomor PR diinput di detail item (Ini hanya sebagai data pendukung di level item)
+            pr_number_item = st.text_input("Nomor PR (Manual per Item)*", key="item_pr_number", help="Masukkan nomor PR yang menyatukan item ini (untuk reference).")
 
             # Grid untuk detail item
             col_item_1, col_item_2, col_item_3, col_item_4 = st.columns(4)
@@ -276,7 +276,7 @@ elif st.session_state.active_page == "Purchase Request":
                 st.success(f"✅ Item **'{description}'** berhasil ditambahkan dengan PR No. **{pr_number_item}**.")
                 st.rerun() 
             else:
-                st.error("⚠️ Mohon lengkapi semua kolom yang bertanda bintang (*), termasuk Nomor PR.")
+                st.error("⚠️ Mohon lengkapi semua kolom yang bertanda bintang (*), termasuk Nomor PR per Item.")
 
     st.markdown("---")
     
@@ -284,22 +284,21 @@ elif st.session_state.active_page == "Purchase Request":
     st.markdown("### Daftar Item PR Siap Proses")
     
     if st.session_state.pr_items:
-        # LOGIKA PERBAIKAN DIMULAI DI SINI
         pr_df = pd.DataFrame(st.session_state.pr_items)
         
         # Hitung Grand Total dari nilai numerik sebelum diformat
         total_all_items = sum(item["Total Price (Est)"] for item in st.session_state.pr_items)
         
-        # Ambil Nomor PR yang unik untuk validasi (Sudah aman karena di dalam blok 'if pr_items')
-        pr_numbers_in_list = list(set(item["PR Number"] for item in st.session_state.pr_items))
+        # Ambil Nomor PR yang unik (hanya untuk info/warning)
+        pr_numbers_in_list = list(set(item.get("PR Number") for item in st.session_state.pr_items if item.get("PR Number")))
         
-        # Penentuan display PR number
-        if len(pr_numbers_in_list) == 1:
-            pr_number_display = pr_numbers_in_list[0]
-            st.info(f"Semua item akan disubmit dalam satu Purchase Request dengan Nomor: **{pr_number_display}**")
+        # Tampilkan warning jika ada PR Number berbeda, tapi tidak memblokir submit
+        if len(pr_numbers_in_list) > 1:
+             st.warning(f"⚠️ Ditemukan **{len(pr_numbers_in_list)}** Nomor PR berbeda dalam daftar: {', '.join(pr_numbers_in_list)}. Harap pastikan Nomor PR yang diinput di bawah adalah yang benar.")
+        elif len(pr_numbers_in_list) == 1:
+             st.info(f"Semua item akan dikonsolidasikan dalam satu Purchase Request. Nomor PR yang disarankan: **{pr_numbers_in_list[0]}**")
         else:
-            pr_number_display = "TIDAK BISA DISUBMIT (Nomor PR Berbeda/Kosong)"
-            st.error(f"❌ Peringatan: Ditemukan **{len(pr_numbers_in_list)}** Nomor PR berbeda dalam daftar. Hanya satu Nomor PR yang diperbolehkan untuk disubmit.")
+             st.warning("⚠️ Belum ada Nomor PR diinput di semua item. Harap input Nomor PR di form submission final.")
 
 
         # Format kolom untuk tampilan
@@ -326,8 +325,13 @@ elif st.session_state.active_page == "Purchase Request":
             col_pr_1, col_pr_2 = st.columns(2)
             
             with col_pr_1:
-                # Nomor PR diambil dari item dan ditampilkan (disabled)
-                st.text_input("Nomor PR yang Akan Disubmit", value=pr_number_display, disabled=True)
+                # PERUBAHAN UTAMA DISINI: Nomor PR diinput manual lagi dan wajib diisi
+                pr_number_final = st.text_input(
+                    "Nomor PR Final*", 
+                    key="pr_number_final_manual",
+                    value=pr_numbers_in_list[0] if len(pr_numbers_in_list) == 1 else "", # Isi otomatis jika hanya 1 PR Number
+                    help="Masukkan Nomor PR yang akan digunakan untuk submission ini. Harus diisi manual."
+                )
                 category = st.selectbox("Category*", ["Sumbawa", "Kantor Bali", "Operasional Lain"], key="pr_category", help="Lokasi/Project yang mengajukan PR.")
                 date_request = st.date_input("Tanggal Request*", value=date.today(), disabled=True) 
             
@@ -338,12 +342,10 @@ elif st.session_state.active_page == "Purchase Request":
             submitted_pr = st.form_submit_button("Submit Purchase Request Mingguan")
             
             if submitted_pr:
-                # Validasi: 1. Nomor PR harus sama (panjang list 1). 2. Field header harus diisi.
-                if len(pr_numbers_in_list) > 1:
-                    st.error("⚠️ Gagal Submit: Semua item dalam daftar harus menggunakan Nomor PR yang sama untuk konsolidasi.")
-                elif prepared_by and reason and category:
+                # Validasi: Nomor PR Final, prepared by, reason, dan category harus diisi.
+                if pr_number_final and prepared_by and reason and category:
                     st.success(f"""
-                    🎉 Purchase Request **{pr_number_display}** dengan **{len(st.session_state.pr_items)} item** berhasil diajukan!
+                    🎉 Purchase Request **{pr_number_final}** dengan **{len(st.session_state.pr_items)} item** berhasil diajukan!
                     - Grand Total Estimasi: **Rp {total_all_items:,.0f}**
                     - Diajukan oleh: {prepared_by}
                     """)
@@ -352,7 +354,7 @@ elif st.session_state.active_page == "Purchase Request":
                     st.session_state.pr_items = []
                     st.rerun() 
                 else:
-                    st.error("⚠️ Mohon lengkapi semua data header PR (Prepared by, Category, dan Alasan).")
+                    st.error("⚠️ Gagal Submit: Mohon lengkapi semua data header PR, terutama **Nomor PR Final** yang wajib diisi.")
         
         # Opsi hapus seluruh daftar
         if st.button("❌ Hapus Semua Item dari Daftar"):
