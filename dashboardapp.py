@@ -49,7 +49,7 @@ st.markdown(f"""
     width: 260px;
 }}
 .sidebar-title {{
-    color: white;
+    color: white; /* Sidebar title tetap putih */
     font-weight: bold;
     font-size: 22px;
     text-align: left;
@@ -63,13 +63,10 @@ st.markdown(f"""
     padding: 0 !important;
 }}
 
-/* Target setiap opsi radio */
+/* Target setiap opsi radio (putih) */
 [data-testid="stSidebar"] [data-testid="stRadio"] label {{
-    /* Menghilangkan radio circle (Titik/Lingkaran Radio) */
     display: flex;
     align-items: center;
-    
-    /* Menggunakan styling .menu-item yang kamu buat */
     margin: 6px 12px;
     border-radius: 10px;
     padding: 10px 20px;
@@ -77,7 +74,7 @@ st.markdown(f"""
     transition: all 0.2s ease;
 }}
 
-/* Warna hover */
+/* Warna hover sidebar */
 [data-testid="stSidebar"] [data-testid="stRadio"] label:hover {{
     background-color: #1f2937;
     color: #fff !important;
@@ -85,12 +82,12 @@ st.markdown(f"""
 
 /* Target container radio circle */
 [data-testid="stSidebar"] [data-testid="stRadio"] label > div:first-child {{
-    display: none !important; /* Hilangkan radio circle sepenuhnya */
+    display: none !important; 
 }}
 
 /* Gaya untuk opsi yang aktif (terpilih) */
 [data-testid="stSidebar"] [data-testid="stRadio"] label.st-emotion-cache-1bvk7l-container:has(input[aria-checked="true"]) {{
-    background-color: #374151; /* Warna aktif */
+    background-color: #374151;
     color: #fff !important; 
     font-weight: 600;
 }}
@@ -101,7 +98,7 @@ st.markdown(f"""
     border-radius: 15px;
     padding: 20px;
     text-align: center;
-    color: white;
+    color: white; /* Teks di Metric Card tetap putih */
     box-shadow: 0px 4px 8px rgba(0,0,0,0.2);
 }}
 .metric-value {{
@@ -123,44 +120,53 @@ tbody tr td {{
     text-align: center !important;
 }}
 
-/* Main background (Teks Global Putih) */
+/* Main background */
 .stApp {{
     background-color: #F9FAFB;
-    color: white; 
+    /* MENGHAPUS 'color: white;' agar teks utama dan judul kembali ke warna default */
 }}
 
-/* Target Judul dan Konten utama lainnya (Putih) */
-h1, h2, h3, h4, 
-[data-testid="stText"], 
-[data-testid="stMarkdownContainer"] {{
-    color: white !important; 
-}}
-
-/* Memastikan Input/Selectbox Label juga putih */
+/* Memastikan Label Input putih agar terlihat di background gelap */
 label {{
-    color: white !important;
+    color: black !important; /* Diubah menjadi hitam agar terlihat di background putih (default) */
 }}
 
 /* ======================================================= */
 /* PERBAIKAN: Memastikan teks di dalam input berwarna HITAM */
 /* ======================================================= */
+
+/* Menargetkan Input, Number, Textarea value */
 [data-testid="stTextInput"] input, 
 [data-testid="stNumberInput"] input,
-[data-testid="stSelectbox"] div[role="listbox"],
 [data-testid="stTextArea"] textarea,
-.st-ax,
-.st-bd,
-.st-be {{
+/* Menargetkan value yang dipilih di Selectbox */
+[data-testid="stSelectbox"] .st-er, 
+[data-testid="stSelectbox"] .st-bo, 
+[data-testid="stSelectbox"] div[data-baseweb="select"] span {
     color: black !important; 
-    background-color: white !important; /* Agar kontras */
-}}
+    background-color: white !important; /* Latar belakang input putih */
+}
+
+/* Menargetkan list dropdown yang terbuka */
+div[data-baseweb="popover"] .st-bd,
+div[data-baseweb="popover"] li {
+    color: black !important;
+}
 
 /* Mengatur warna placeholder di dalam INPUT (Abu-abu gelap) */
 [data-testid="stTextInput"] input::placeholder, 
 [data-testid="stNumberInput"] input::placeholder,
-[data-testid="stTextArea"] textarea::placeholder {{
+[data-testid="stTextArea"] textarea::placeholder {
     color: #4a4a4a !important; 
-}}
+}
+
+/* Selektor global untuk judul/teks yang ingin dipertahankan warnanya */
+/* Jika Anda menggunakan tema gelap (dark theme), teks di bawah ini akan hitam di dark theme */
+h1, h2, h3, h4, 
+[data-testid="stText"], 
+[data-testid="stMarkdownContainer"] {
+    /* MENGHAPUS 'color: white !important;' */
+}
 
 </style>
 """, unsafe_allow_html=True)
