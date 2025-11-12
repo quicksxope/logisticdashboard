@@ -39,7 +39,7 @@ if "pr_items" not in st.session_state:
     st.session_state.pr_items = []
 
 
-# CSS untuk styling custom dan override Streamlit Radio (BLOK KODE YANG DIPERBAIKI)
+# CSS untuk styling custom dan override Streamlit Radio
 st.markdown(f"""
 <style>
 /* Sidebar styling */
@@ -58,6 +58,8 @@ st.markdown(f"""
 }}
 
 /* Custom Styling for Streamlit Radio Buttons to look like menu items */
+/* HANYA TEXT MENU NAVIGASI YANG DIBUAT PUTIH */
+
 /* Menghapus padding default untuk container radio */
 [data-testid="stSidebar"] [data-testid="stForm"] > div > div > div {{
     padding: 0 !important;
@@ -70,7 +72,7 @@ st.markdown(f"""
     margin: 6px 12px;
     border-radius: 10px;
     padding: 10px 20px;
-    color: #fff !important; 
+    color: #fff !important; /* <--- INI MEMBUAT TEKS MENU NAVIGASI PUTIH */
     transition: all 0.2s ease;
 }}
 
@@ -123,52 +125,14 @@ tbody tr td {{
 /* Main background */
 .stApp {{
     background-color: #F9FAFB;
+    /* Tidak ada properti 'color' di sini, sehingga teks utama mengikuti default Streamlit */
 }}
 
-/* Memastikan Label Input menjadi gelap (default) */
-label {{
-    color: black !important; 
-}}
-
-/* ======================================================= */
-/* PERBAIKAN: Memastikan teks di dalam input berwarna HITAM */
-/* ======================================================= */
-
-/* Menargetkan Input, Number, Textarea value */
-[data-testid="stTextInput"] input, 
-[data-testid="stNumberInput"] input,
-[data-testid="stTextArea"] textarea,
-/* Menargetkan value yang dipilih di Selectbox */
-[data-testid="stSelectbox"] .st-er, 
-[data-testid="stSelectbox"] .st-bo, 
-[data-testid="stSelectbox"] div[data-baseweb="select"] span {{
-    color: black !important; 
-    background-color: white !important; 
-}}
-
-/* Menargetkan list dropdown yang terbuka */
-div[data-baseweb="popover"] .st-bd,
-div[data-baseweb="popover"] li {{
-    color: black !important;
-}}
-
-/* Mengatur warna placeholder di dalam INPUT (Abu-abu gelap) */
-[data-testid="stTextInput"] input::placeholder, 
-[data-testid="stNumberInput"] input::placeholder,
-[data-testid="stTextArea"] textarea::placeholder {{
-    color: #4a4a4a !important; 
-}}
-
-/* Selektor global untuk judul/teks yang ingin dipertahankan warnanya */
-h1, h2, h3, h4, 
-[data-testid="stText"], 
-[data-testid="stMarkdownContainer"] {{
-    /* Kosong. Menggunakan warna default Streamlit. */
-}}
+/* Semua penyesuaian warna teks lainnya (judul, label, input) DIHAPUS */
+/* sehingga teks tersebut akan berwarna gelap/hitam secara default */
 
 </style>
 """, unsafe_allow_html=True)
-
 
 # ========== SIDEBAR MENU (FIXED) ==========
 st.sidebar.markdown("<div class='sidebar-title'>🦐 Tambak Logistik</div>", unsafe_allow_html=True)
