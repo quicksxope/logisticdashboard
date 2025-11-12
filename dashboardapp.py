@@ -7,6 +7,7 @@ from datetime import date
 st.set_page_config(page_title="Sistem Logistik Tambak Udang", layout="wide")
 
 # ========== DUMMY DATA (Data Tambahan untuk PR yang Disetujui) ==========
+# Data ini tetap sama untuk simulasi Purchase Order
 approved_pr_data = pd.DataFrame({
     "PR No.": ["PR-INA/00100", "PR-INA/00100", "PR-INA/00101", "PR-INA/00102"],
     "Deskripsi Barang": ["Pakan Udang Premium Type A", "Obat Antibiotik Air", "Benur Vaname Size 10", "Alat Aerator 5PK"],
@@ -33,7 +34,12 @@ menu_items = {
 if "active_page" not in st.session_state:
     st.session_state.active_page = "Dashboard"
 
-# CSS untuk styling custom dan override Streamlit Radio
+# Inisialisasi session state untuk menyimpan daftar item PR
+if "pr_items" not in st.session_state:
+    st.session_state.pr_items = []
+
+
+# CSS untuk styling custom dan override Streamlit Radio (Dipotong untuk kejelasan, tetap sama dengan sebelumnya)
 st.markdown(f"""
 <style>
 /* Sidebar styling */
@@ -130,10 +136,7 @@ tbody tr td {{
 # ========== SIDEBAR MENU (FIXED) ==========
 st.sidebar.markdown("<div class='sidebar-title'>🦐 Tambak Logistik</div>", unsafe_allow_html=True)
 
-# List kunci untuk opsi radio
 menu_keys = list(menu_items.keys())
-
-# Menggunakan st.sidebar.radio untuk navigasi yang berfungsi penuh
 selected_page = st.sidebar.radio(
     "Navigasi", 
     options=menu_keys,
@@ -142,11 +145,9 @@ selected_page = st.sidebar.radio(
     key='app_navigation_radio'
 )
 
-# Sinkronisasi Session State dengan pilihan radio
 st.session_state.active_page = selected_page
 
-
-# ========== DUMMY DATA UTAMA (BISA DIGUNAKAN DI DASHBOARD) ==========
+# DUMMY DATA UTAMA (BISA DIGUNAKAN DI DASHBOARD)
 shipment_data = pd.DataFrame({
     "Order ID": ["BA92123", "KH92129", "SD92123", "BA92124", "SD92125"],
     "Type of Goods": ["Pakan Udang", "Obat Air", "Benur Vaname", "Vitamin Tambak", "Alat Aerator"],
@@ -156,9 +157,17 @@ shipment_data = pd.DataFrame({
 })
 
 
+# ========== FUNGSI UNTUK MENGHAPUS ITEM PR ==========
+def delete_pr_item(index):
+    """Menghapus item PR dari list berdasarkan index."""
+    if 0 <= index < len(st.session_state.pr_items):
+        st.session_state.pr_items.pop(index)
+        st.experimental_rerun() # Refresh halaman untuk update tabel
+
+
 # ========== TAMPILKAN KONTEN BERDASARKAN HALAMAN AKTIF ==========
 if st.session_state.active_page == "Dashboard":
-    # --- Konten Dashboard (Tidak Berubah) ---
+    # --- Konten Dashboard ---
     st.title("📊 Dashboard Logistik Tambak Udang")
     st.write("Selamat datang kembali, Bayu 👋")
 
@@ -189,9 +198,8 @@ if st.session_state.active_page == "Dashboard":
     st.dataframe(shipment_data, use_container_width=True, hide_index=True)
 
 
-# ========== HALAMAN STOK MASUK ==========
+# ========== HALAMAN STOK MASUK (Dipotong) ==========
 elif st.session_state.active_page == "Stok Masuk":
-    # --- Konten Stok Masuk (Tidak Berubah) ---
     st.title("⬆️ Input Stok Masuk")
     with st.form("form_masuk"):
         jenis = st.text_input("Jenis Barang")
@@ -202,9 +210,8 @@ elif st.session_state.active_page == "Stok Masuk":
         st.success(f"✅ Data stok masuk '{jenis}' sejumlah {jumlah} berhasil disimpan!")
 
 
-# ========== HALAMAN STOK KELUAR ==========
+# ========== HALAMAN STOK KELUAR (Dipotong) ==========
 elif st.session_state.active_page == "Stok Keluar":
-    # --- Konten Stok Keluar (Tidak Berubah) ---
     st.title("⬇️ Input Stok Keluar")
     with st.form("form_keluar"):
         jenis = st.text_input("Jenis Barang")
@@ -215,61 +222,126 @@ elif st.session_state.active_page == "Stok Keluar":
         st.success(f"✅ Data stok keluar '{jenis}' sejumlah {jumlah} berhasil disimpan!")
 
 
-# ========== HALAMAN PURCHASE REQUEST ==========
+# ===============================================
+# ========== HALAMAN PURCHASE REQUEST (MODIFIED) ==========
+# ===============================================
 elif st.session_state.active_page == "Purchase Request":
     st.title("📝 Input Purchase Request")
-    st.subheader("Informasi Umum Permintaan")
-    
-    with st.form("form_purchase_request"):
-        col_pr_1, col_pr_2 = st.columns(2)
-        
-        # Kolom Kiri
-        with col_pr_1:
-            today_date_str = pd.Timestamp.today().strftime('%Y%m%d') 
-            pr_number = st.text_input("Nomor PR", value=f"PR-INA/{today_date_str}-XXX", disabled=True, help="Nomor PR akan di-generate otomatis oleh sistem.")
-            category = st.selectbox("Category", ["Sumbawa", "Kantor Bali", "Operasional Lain"], help="Lokasi/Project yang mengajukan PR.")
-            # Tanggal Request di-fix-kan hari ini dan disabled
-            date_request = st.date_input("Tanggal Request", value=date.today(), disabled=True) 
-            prepared_by = st.text_input("Prepared by", help="Nama karyawan yang mengajukan permintaan.")
+    st.write("Silakan input setiap item barang satu per satu. Semua item akan disatukan menjadi satu Purchase Request mingguan saat Anda menekan tombol 'Submit'.")
+
+    # --- 1. Form Item Barang (Input Per Barang) ---
+    with st.expander("➕ Tambah Item Baru", expanded=True):
+        with st.form("form_add_item", clear_on_submit=True):
+            st.markdown("### Detail Item yang Dibutuhkan")
             
-        # Kolom Kanan
-        with col_pr_2:
-            supplier = st.text_input("Supplier/Vendor Direkomendasikan")
-            exp_receive_date = st.date_input("Tanggal Penerimaan Target")
-            contact_person = st.text_input("Kontak Supplier (Opsional)", help="Nomor Telepon atau Email Supplier.")
-            reason = st.text_area("Alasan / Tujuan Pembelian", help="Contoh: Pembelian Alat Pencuci Mobil, Maintenance Excavator.")
-        
-        st.markdown("---")
-        st.subheader("Detail Item yang Dibutuhkan")
-        
-        # Grid untuk detail item
-        col_item_1, col_item_2, col_item_3, col_item_4 = st.columns(4)
-        with col_item_1:
-            description = st.text_input("Deskripsi Barang/Jasa")
-        with col_item_2:
-            qty = st.number_input("Kuantitas (Qty)", min_value=1, value=1)
-        with col_item_3:
-            uom = st.text_input("Satuan (UOM)", value="unit")
-        with col_item_4:
-            unit_price = st.number_input("Harga Satuan (Unit Price)", min_value=0, format="%i")
+            # Grid untuk detail item
+            col_item_1, col_item_2, col_item_3, col_item_4 = st.columns(4)
+            with col_item_1:
+                description = st.text_input("Deskripsi Barang/Jasa*")
+            with col_item_2:
+                qty = st.number_input("Kuantitas (Qty)*", min_value=1, value=1, key="item_qty")
+            with col_item_3:
+                uom = st.text_input("Satuan (UOM)*", value="unit", key="item_uom")
+            with col_item_4:
+                unit_price = st.number_input("Harga Satuan (Estimasi, Rp)*", min_value=0, format="%i", key="item_price")
 
-        total_price = qty * unit_price
-        st.info(f"**Total Harga Estimasi:** Rp {total_price:,.0f}")
+            # Input Supplier dan Target Terima dipindah ke sini agar bisa di-input per item
+            col_sup_1, col_sup_2 = st.columns(2)
+            with col_sup_1:
+                supplier = st.text_input("Supplier/Vendor Direkomendasikan*")
+            with col_sup_2:
+                exp_receive_date = st.date_input("Tanggal Penerimaan Target*", min_value=date.today())
+            
+            total_price = qty * unit_price
+            st.info(f"**Total Harga Estimasi Item:** Rp {total_price:,.0f}")
+            
+            submitted_item = st.form_submit_button("Tambahkan ke Daftar PR")
         
-        st.markdown("---")
-        submitted = st.form_submit_button("Submit Purchase Request")
-        
-    if submitted:
-        if description and prepared_by and supplier and reason and total_price > 0:
-            st.success(f"""
-            ✅ Purchase Request **{pr_number}** berhasil dibuat dan menunggu persetujuan!
-            - Barang: {description} ({qty} {uom})
-            - Total Estimasi: Rp {total_price:,.0f}
-            """)
-        else:
-            st.error("⚠️ Mohon isi semua kolom penting.")
+        if submitted_item:
+            if description and supplier and total_price > 0:
+                # Tambahkan item baru ke Session State
+                new_item = {
+                    "Description": description,
+                    "Qty": qty,
+                    "UOM": uom,
+                    "Unit Price (Est)": unit_price,
+                    "Total Price (Est)": total_price,
+                    "Supplier Recomendation": supplier,
+                    "Exp Receive Date": exp_receive_date.strftime('%Y-%m-%d')
+                }
+                st.session_state.pr_items.append(new_item)
+                st.success(f"✅ Item **'{description}'** berhasil ditambahkan.")
+                st.experimental_rerun()
+            else:
+                st.error("⚠️ Mohon lengkapi semua kolom yang bertanda bintang (*).")
 
-# ========== HALAMAN PURCHASE ORDER (BARU) ==========
+    st.markdown("---")
+    
+    # --- 2. Tampilan Daftar Item Yang Sudah Diinput ---
+    st.markdown("### Daftar Item PR Siap Proses")
+    
+    if st.session_state.pr_items:
+        pr_df = pd.DataFrame(st.session_state.pr_items)
+        pr_df['Total Price (Est)'] = pr_df['Total Price (Est)'].apply(lambda x: f"Rp {x:,.0f}")
+        pr_df['Unit Price (Est)'] = pr_df['Unit Price (Est)'].apply(lambda x: f"Rp {x:,.0f}")
+
+        # Tampilkan tabel item
+        st.dataframe(
+            pr_df.reset_index(drop=True).style.set_properties(**{'text-align': 'center'}),
+            use_container_width=True,
+            hide_index=False,
+            column_order=["Description", "Qty", "UOM", "Unit Price (Est)", "Total Price (Est)", "Supplier Recomendation", "Exp Receive Date"]
+        )
+
+        total_all_items = sum(item["Total Price (Est)"] for item in st.session_state.pr_items)
+        st.subheader(f"Grand Total Estimasi PR: **Rp {total_all_items:,.0f}**")
+        st.markdown("---")
+        
+        # --- 3. Form Header PR (Disubmit Sekali) ---
+        st.markdown("### Konfirmasi dan Pengajuan Purchase Request")
+
+        with st.form("form_submit_pr"):
+            col_pr_1, col_pr_2 = st.columns(2)
+            
+            with col_pr_1:
+                # Nomor PR (Generate per submission)
+                today_date_str = pd.Timestamp.today().strftime('%Y%m%d') 
+                pr_number = st.text_input("Nomor PR", value=f"PR-INA/{today_date_str}-01", disabled=True)
+                category = st.selectbox("Category*", ["Sumbawa", "Kantor Bali", "Operasional Lain"], key="pr_category", help="Lokasi/Project yang mengajukan PR.")
+                date_request = st.date_input("Tanggal Request*", value=date.today(), disabled=True) 
+            
+            with col_pr_2:
+                prepared_by = st.text_input("Prepared by*", key="pr_prepared_by", help="Nama karyawan yang mengajukan permintaan.")
+                reason = st.text_area("Alasan / Tujuan Pembelian (Utama)*", key="pr_reason", help="Contoh: Pembelian untuk kebutuhan operasional bulanan.")
+                
+            submitted_pr = st.form_submit_button("Submit Purchase Request Mingguan")
+            
+            if submitted_pr:
+                if prepared_by and reason and category:
+                    st.success(f"""
+                    🎉 Purchase Request **{pr_number}** dengan **{len(st.session_state.pr_items)} item** berhasil diajukan!
+                    - Grand Total Estimasi: **Rp {total_all_items:,.0f}**
+                    - Diajukan oleh: {prepared_by}
+                    """)
+                    
+                    # Reset list setelah berhasil submit
+                    st.session_state.pr_items = []
+                    # Optional: Rerun untuk membersihkan tampilan
+                    st.experimental_rerun() 
+                else:
+                    st.error("⚠️ Mohon lengkapi semua data header PR (Prepared by, Category, dan Alasan).")
+        
+        # Opsi hapus seluruh daftar
+        if st.button("❌ Hapus Semua Item dari Daftar"):
+            st.session_state.pr_items = []
+            st.success("Daftar item PR berhasil dikosongkan.")
+            st.experimental_rerun()
+
+    else:
+        st.warning("Daftar Purchase Request masih kosong. Silakan tambahkan item di bagian 'Tambah Item Baru'.")
+
+
+# ========== HALAMAN PURCHASE ORDER (Tidak Berubah) ==========
 elif st.session_state.active_page == "Purchase Order":
     st.title("📄 Pembuatan Purchase Order")
     st.subheader("Daftar Item Purchase Request yang Siap Dibuatkan PO")
@@ -279,7 +351,7 @@ elif st.session_state.active_page == "Purchase Order":
     # 1. Buat salinan data dan tambahkan kolom 'select' secara eksplisit
     po_df = approved_pr_data.copy()
     if 'select' not in po_df.columns:
-        po_df.insert(0, 'select', False) # Masukkan kolom 'select' sebagai kolom pertama
+        po_df.insert(0, 'select', False)
         
     st.markdown("### Item PR Approved")
     
@@ -287,7 +359,6 @@ elif st.session_state.active_page == "Purchase Order":
     edited_df = st.data_editor(
         po_df,
         column_config={
-            # Konfigurasi CheckboxColumn hanya untuk styling dan label
             "select": st.column_config.CheckboxColumn(
                 "Pilih",
                 help="Pilih item yang akan dibuatkan Purchase Order",
@@ -311,7 +382,7 @@ elif st.session_state.active_page == "Purchase Order":
         hide_index=True
     )
 
-    # 3. Filter DataFrame yang sudah diedit. Ini sekarang aman karena kolom 'select' pasti ada.
+    # 3. Filter DataFrame yang sudah diedit.
     selected_items = edited_df[edited_df['select']] 
     
     st.markdown("---")
@@ -348,7 +419,6 @@ elif st.session_state.active_page == "Purchase Order":
                 final_df['Harga Final (Rp)'] = final_df['Unit Price (Estimasi)']
                 final_df = final_df.drop(columns=['select', 'Unit Price (Estimasi)', 'Total Estimasi'])
 
-                # Menampilkan item yang dipilih dan memungkinkan input harga final
                 st.dataframe(
                     final_df.style.format({
                         'Harga Final (Rp)': "Rp {:,.0f}", 
@@ -367,8 +437,7 @@ elif st.session_state.active_page == "Purchase Order":
         st.warning("Silakan pilih minimal satu item PR yang sudah di-approve di tabel di atas untuk membuat Purchase Order baru.")
 
 
-# ========== HALAMAN SETTING ==========
+# ========== HALAMAN SETTING (Dipotong) ==========
 elif st.session_state.active_page == "Setting":
-    # --- Konten Setting (Tidak Berubah) ---
     st.title("⚙️ Pengaturan Sistem")
     st.write("Tempat untuk konfigurasi API Key, database, dan backup data.")
