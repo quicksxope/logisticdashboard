@@ -225,13 +225,16 @@ elif st.session_state.active_page == "Stok Keluar":
 # ===============================================
 elif st.session_state.active_page == "Purchase Request":
     st.title("📝 Input Purchase Request")
-    st.write("Silakan input setiap item barang satu per satu. Semua item akan disatukan menjadi satu Purchase Request mingguan saat Anda menekan tombol 'Submit'.")
+    st.write("Silakan input setiap item barang satu per satu. **Nomor PR harus diinput bersama setiap item** dan semua item harus memiliki nomor PR yang sama saat disubmit.")
 
     # --- 1. Form Item Barang (Input Per Barang) ---
     with st.expander("➕ Tambah Item Baru", expanded=True):
         with st.form("form_add_item", clear_on_submit=True):
             st.markdown("### Detail Item yang Dibutuhkan")
             
+            # PERUBAHAN DISINI: Nomor PR diinput di detail item
+            pr_number_item = st.text_input("Nomor PR (Manual)*", key="item_pr_number", help="Masukkan nomor PR yang akan menyatukan item ini.")
+
             # Grid untuk detail item
             col_item_1, col_item_2, col_item_3, col_item_4 = st.columns(4)
             with col_item_1:
@@ -256,9 +259,11 @@ elif st.session_state.active_page == "Purchase Request":
             submitted_item = st.form_submit_button("Tambahkan ke Daftar PR")
         
         if submitted_item:
-            if description and supplier and total_price > 0:
+            # Tambah validasi untuk pr_number_item
+            if description and supplier and total_price > 0 and pr_number_item:
                 # Tambahkan item baru ke Session State
                 new_item = {
+                    "PR Number": pr_number_item, # Masukkan Nomor PR ke item
                     "Description": description,
                     "Qty": qty,
                     "UOM": uom,
@@ -268,10 +273,10 @@ elif st.session_state.active_page == "Purchase Request":
                     "Exp Receive Date": exp_receive_date.strftime('%Y-%m-%d')
                 }
                 st.session_state.pr_items.append(new_item)
-                st.success(f"✅ Item **'{description}'** berhasil ditambahkan.")
+                st.success(f"✅ Item **'{description}'** berhasil ditambahkan dengan PR No. **{pr_number_item}**.")
                 st.rerun() 
             else:
-                st.error("⚠️ Mohon lengkapi semua kolom yang bertanda bintang (*).")
+                st.error("⚠️ Mohon lengkapi semua kolom yang bertanda bintang (*), termasuk Nomor PR.")
 
     st.markdown("---")
     
@@ -283,6 +288,11 @@ elif st.session_state.active_page == "Purchase Request":
         
         # Hitung Grand Total dari nilai numerik sebelum diformat
         total_all_items = sum(item["Total Price (Est)"] for item in st.session_state.pr_items)
+        
+        # Ambil Nomor PR yang unik untuk validasi
+        pr_numbers_in_list = list(set(item["PR Number"] for item in st.session_state.pr_items))
+        pr_number_display = pr_numbers_in_list[0] if len(pr_numbers_in_list) == 1 else "MULTIPLE PR NUMBERS"
+
 
         # Format kolom untuk tampilan
         pr_df_display = pr_df.copy()
@@ -294,10 +304,16 @@ elif st.session_state.active_page == "Purchase Request":
             pr_df_display.reset_index(drop=True).style.set_properties(**{'text-align': 'center'}),
             use_container_width=True,
             hide_index=False,
-            column_order=["Description", "Qty", "UOM", "Unit Price (Est)", "Total Price (Est)", "Supplier Recomendation", "Exp Receive Date"]
+            column_order=["PR Number", "Description", "Qty", "UOM", "Unit Price (Est)", "Total Price (Est)", "Supplier Recomendation", "Exp Receive Date"]
         )
 
         st.subheader(f"Grand Total Estimasi PR: **Rp {total_all_items:,.0f}**")
+        
+        if len(pr_numbers_in_list) > 1:
+             st.error(f"❌ Peringatan: Ditemukan {len(pr_numbers_in_list)} Nomor PR berbeda dalam daftar. Hanya satu Nomor PR yang diperbolehkan untuk disubmit.")
+        elif pr_number_display != "MULTIPLE PR NUMBERS":
+             st.info(f"Semua item akan disubmit dalam satu Purchase Request dengan Nomor: **{pr_number_display}**")
+             
         st.markdown("---")
         
         # --- 3. Form Header PR (Disubmit Sekali) ---
@@ -307,12 +323,8 @@ elif st.session_state.active_page == "Purchase Request":
             col_pr_1, col_pr_2 = st.columns(2)
             
             with col_pr_1:
-                # PERUBAHAN DISINI: Nomor PR diubah menjadi input manual dan wajib diisi
-                pr_number = st.text_input(
-                    "Nomor PR*", 
-                    key="pr_number_manual", 
-                    help="Masukkan nomor PR secara manual, contoh: PR-INA/122025/001"
-                )
+                # Nomor PR diambil dari item dan ditampilkan (disabled)
+                st.text_input("Nomor PR yang Akan Disubmit", value=pr_number_display, disabled=True)
                 category = st.selectbox("Category*", ["Sumbawa", "Kantor Bali", "Operasional Lain"], key="pr_category", help="Lokasi/Project yang mengajukan PR.")
                 date_request = st.date_input("Tanggal Request*", value=date.today(), disabled=True) 
             
@@ -323,10 +335,12 @@ elif st.session_state.active_page == "Purchase Request":
             submitted_pr = st.form_submit_button("Submit Purchase Request Mingguan")
             
             if submitted_pr:
-                # TAMBAHAN VALIDASI: Memastikan pr_number tidak kosong
-                if prepared_by and reason and category and pr_number:
+                # Validasi: 1. Nomor PR harus sama. 2. Field header harus diisi.
+                if len(pr_numbers_in_list) > 1:
+                    st.error("⚠️ Gagal Submit: Semua item dalam daftar harus menggunakan Nomor PR yang sama untuk konsolidasi.")
+                elif prepared_by and reason and category:
                     st.success(f"""
-                    🎉 Purchase Request **{pr_number}** dengan **{len(st.session_state.pr_items)} item** berhasil diajukan!
+                    🎉 Purchase Request **{pr_number_display}** dengan **{len(st.session_state.pr_items)} item** berhasil diajukan!
                     - Grand Total Estimasi: **Rp {total_all_items:,.0f}**
                     - Diajukan oleh: {prepared_by}
                     """)
@@ -335,7 +349,7 @@ elif st.session_state.active_page == "Purchase Request":
                     st.session_state.pr_items = []
                     st.rerun() 
                 else:
-                    st.error("⚠️ Mohon lengkapi semua data header PR (Nomor PR, Prepared by, Category, dan Alasan).")
+                    st.error("⚠️ Mohon lengkapi semua data header PR (Prepared by, Category, dan Alasan).")
         
         # Opsi hapus seluruh daftar
         if st.button("❌ Hapus Semua Item dari Daftar"):
