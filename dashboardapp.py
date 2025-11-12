@@ -276,11 +276,18 @@ elif st.session_state.active_page == "Purchase Order":
 
     st.info("💡 Data di bawah adalah Purchase Request yang statusnya sudah **Approved** dan siap diproses menjadi Purchase Order.")
     
-    # Menampilkan data PR yang sudah disetujui (Dummy Data)
+    # 1. Buat salinan data dan tambahkan kolom 'select' secara eksplisit
+    po_df = approved_pr_data.copy()
+    if 'select' not in po_df.columns:
+        po_df.insert(0, 'select', False) # Masukkan kolom 'select' sebagai kolom pertama
+        
     st.markdown("### Item PR Approved")
+    
+    # 2. Gunakan st.data_editor pada DataFrame yang sudah memiliki kolom 'select'
     edited_df = st.data_editor(
-        approved_pr_data,
+        po_df,
         column_config={
+            # Konfigurasi CheckboxColumn hanya untuk styling dan label
             "select": st.column_config.CheckboxColumn(
                 "Pilih",
                 help="Pilih item yang akan dibuatkan Purchase Order",
@@ -299,12 +306,12 @@ elif st.session_state.active_page == "Purchase Order":
                 format="YYYY/MM/DD",
             )
         },
-        disabled=("PR No.", "Deskripsi Barang", "Qty", "UOM", "Total Estimasi", "Supplier Rekomendasi"),
+        disabled=("PR No.", "Deskripsi Barang", "Qty", "UOM", "Total Estimasi", "Supplier Rekomendasi", "Tgl Target Terima"),
         use_container_width=True,
         hide_index=True
     )
 
-    # PERBAIKAN: Menggunakan bracket notation ['select'] untuk menghindari AttributeError
+    # 3. Filter DataFrame yang sudah diedit. Ini sekarang aman karena kolom 'select' pasti ada.
     selected_items = edited_df[edited_df['select']] 
     
     st.markdown("---")
