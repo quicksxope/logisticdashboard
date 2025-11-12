@@ -126,7 +126,21 @@ tbody tr td {{
 /* Main background */
 .stApp {{
     background-color: #F9FAFB;
+    color: white; /* <--- PERUBAHAN UTAMA: Warna teks default untuk app body */
 }}
+
+/* Target Judul dan Konten utama lainnya */
+h1, h2, h3, h4, 
+[data-testid="stText"], 
+[data-testid="stMarkdownContainer"] {{
+    color: white !important; /* <--- PERUBAHAN TAMBAHAN: Memastikan judul dan teks non-input menjadi putih */
+}}
+
+/* Memastikan Input/Selectbox Label juga putih */
+label {{
+    color: white !important;
+}}
+
 </style>
 """, unsafe_allow_html=True)
 
