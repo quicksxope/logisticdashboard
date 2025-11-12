@@ -214,7 +214,8 @@ elif st.session_state.active_page == "Purchase Request":
             today_date_str = pd.Timestamp.today().strftime('%Y%m%d') 
             pr_number = st.text_input("Nomor PR", value=f"PR-INA/{today_date_str}-XXX", disabled=True, help="Nomor PR akan di-generate otomatis oleh sistem.")
             category = st.selectbox("Category", ["Sumbawa", "Kantor Bali", "Operasional Lain"], help="Lokasi/Project yang mengajukan PR.")
-            date_request = st.date_input("Tanggal Request", value=date.today())
+            # --- PERUBAHAN DI SINI: Tanggal Request di-fix-kan hari ini dan disabled ---
+            date_request = st.date_input("Tanggal Request", value=date.today(), disabled=True)
             prepared_by = st.text_input("Prepared by", help="Nama karyawan yang mengajukan permintaan.")
             
         # Kolom Kanan
