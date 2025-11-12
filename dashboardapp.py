@@ -284,14 +284,22 @@ elif st.session_state.active_page == "Purchase Request":
     st.markdown("### Daftar Item PR Siap Proses")
     
     if st.session_state.pr_items:
+        # LOGIKA PERBAIKAN DIMULAI DI SINI
         pr_df = pd.DataFrame(st.session_state.pr_items)
         
         # Hitung Grand Total dari nilai numerik sebelum diformat
         total_all_items = sum(item["Total Price (Est)"] for item in st.session_state.pr_items)
         
-        # Ambil Nomor PR yang unik untuk validasi
+        # Ambil Nomor PR yang unik untuk validasi (Sudah aman karena di dalam blok 'if pr_items')
         pr_numbers_in_list = list(set(item["PR Number"] for item in st.session_state.pr_items))
-        pr_number_display = pr_numbers_in_list[0] if len(pr_numbers_in_list) == 1 else "MULTIPLE PR NUMBERS"
+        
+        # Penentuan display PR number
+        if len(pr_numbers_in_list) == 1:
+            pr_number_display = pr_numbers_in_list[0]
+            st.info(f"Semua item akan disubmit dalam satu Purchase Request dengan Nomor: **{pr_number_display}**")
+        else:
+            pr_number_display = "TIDAK BISA DISUBMIT (Nomor PR Berbeda/Kosong)"
+            st.error(f"❌ Peringatan: Ditemukan **{len(pr_numbers_in_list)}** Nomor PR berbeda dalam daftar. Hanya satu Nomor PR yang diperbolehkan untuk disubmit.")
 
 
         # Format kolom untuk tampilan
@@ -308,11 +316,6 @@ elif st.session_state.active_page == "Purchase Request":
         )
 
         st.subheader(f"Grand Total Estimasi PR: **Rp {total_all_items:,.0f}**")
-        
-        if len(pr_numbers_in_list) > 1:
-             st.error(f"❌ Peringatan: Ditemukan {len(pr_numbers_in_list)} Nomor PR berbeda dalam daftar. Hanya satu Nomor PR yang diperbolehkan untuk disubmit.")
-        elif pr_number_display != "MULTIPLE PR NUMBERS":
-             st.info(f"Semua item akan disubmit dalam satu Purchase Request dengan Nomor: **{pr_number_display}**")
              
         st.markdown("---")
         
@@ -335,7 +338,7 @@ elif st.session_state.active_page == "Purchase Request":
             submitted_pr = st.form_submit_button("Submit Purchase Request Mingguan")
             
             if submitted_pr:
-                # Validasi: 1. Nomor PR harus sama. 2. Field header harus diisi.
+                # Validasi: 1. Nomor PR harus sama (panjang list 1). 2. Field header harus diisi.
                 if len(pr_numbers_in_list) > 1:
                     st.error("⚠️ Gagal Submit: Semua item dalam daftar harus menggunakan Nomor PR yang sama untuk konsolidasi.")
                 elif prepared_by and reason and category:
