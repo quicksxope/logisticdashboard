@@ -73,7 +73,6 @@ st.markdown(f"""
     margin: 6px 12px;
     border-radius: 10px;
     padding: 10px 20px;
-    /* PERUBAHAN DI SINI: Warna teks diubah menjadi #fff (putih) dan ditambahkan !important */
     color: #fff !important; 
     transition: all 0.2s ease;
 }}
@@ -81,7 +80,6 @@ st.markdown(f"""
 /* Warna hover */
 [data-testid="stSidebar"] [data-testid="stRadio"] label:hover {{
     background-color: #1f2937;
-    /* Warna teks saat hover juga di-enforce dengan !important */
     color: #fff !important;
 }}
 
@@ -93,7 +91,7 @@ st.markdown(f"""
 /* Gaya untuk opsi yang aktif (terpilih) */
 [data-testid="stSidebar"] [data-testid="stRadio"] label.st-emotion-cache-1bvk7l-container:has(input[aria-checked="true"]) {{
     background-color: #374151; /* Warna aktif */
-    color: #fff !important; /* Di-enforce juga di sini dengan !important */
+    color: #fff !important; 
     font-weight: 600;
 }}
 
@@ -158,12 +156,12 @@ shipment_data = pd.DataFrame({
 
 
 # ========== FUNGSI UNTUK MENGHAPUS ITEM PR ==========
-# Fungsi ini tidak digunakan lagi dalam UI saat ini, tetapi diperbaiki jika diperlukan
+# Menggunakan st.rerun() yang sudah diperbaiki
 def delete_pr_item(index):
     """Menghapus item PR dari list berdasarkan index."""
     if 0 <= index < len(st.session_state.pr_items):
         st.session_state.pr_items.pop(index)
-        st.rerun() # PERBAIKAN: Mengganti st.experimental_rerun()
+        st.rerun() 
 
 
 # ========== TAMPILKAN KONTEN BERDASARKAN HALAMAN AKTIF ==========
@@ -272,7 +270,7 @@ elif st.session_state.active_page == "Purchase Request":
                 }
                 st.session_state.pr_items.append(new_item)
                 st.success(f"✅ Item **'{description}'** berhasil ditambahkan.")
-                st.rerun() # PERBAIKAN: Mengganti st.experimental_rerun()
+                st.rerun() 
             else:
                 st.error("⚠️ Mohon lengkapi semua kolom yang bertanda bintang (*).")
 
@@ -288,12 +286,13 @@ elif st.session_state.active_page == "Purchase Request":
         total_all_items = sum(item["Total Price (Est)"] for item in st.session_state.pr_items)
 
         # Format kolom untuk tampilan
-        pr_df['Total Price (Est)'] = pr_df['Total Price (Est)'].apply(lambda x: f"Rp {x:,.0f}")
-        pr_df['Unit Price (Est)'] = pr_df['Unit Price (Est)'].apply(lambda x: f"Rp {x:,.0f}")
+        pr_df_display = pr_df.copy()
+        pr_df_display['Total Price (Est)'] = pr_df_display['Total Price (Est)'].apply(lambda x: f"Rp {x:,.0f}")
+        pr_df_display['Unit Price (Est)'] = pr_df_display['Unit Price (Est)'].apply(lambda x: f"Rp {x:,.0f}")
 
         # Tampilkan tabel item
         st.dataframe(
-            pr_df.reset_index(drop=True).style.set_properties(**{'text-align': 'center'}),
+            pr_df_display.reset_index(drop=True).style.set_properties(**{'text-align': 'center'}),
             use_container_width=True,
             hide_index=False,
             column_order=["Description", "Qty", "UOM", "Unit Price (Est)", "Total Price (Est)", "Supplier Recomendation", "Exp Receive Date"]
@@ -309,9 +308,12 @@ elif st.session_state.active_page == "Purchase Request":
             col_pr_1, col_pr_2 = st.columns(2)
             
             with col_pr_1:
-                # Nomor PR (Generate per submission)
-                today_date_str = pd.Timestamp.today().strftime('%Y%m%d') 
-                pr_number = st.text_input("Nomor PR", value=f"PR-INA/{today_date_str}-01", disabled=True)
+                # PERUBAHAN DI SINI: Nomor PR diubah menjadi input manual dan wajib diisi
+                pr_number = st.text_input(
+                    "Nomor PR*", 
+                    key="pr_number_manual", 
+                    help="Masukkan nomor PR secara manual, contoh: PR-INA/122025/001"
+                )
                 category = st.selectbox("Category*", ["Sumbawa", "Kantor Bali", "Operasional Lain"], key="pr_category", help="Lokasi/Project yang mengajukan PR.")
                 date_request = st.date_input("Tanggal Request*", value=date.today(), disabled=True) 
             
@@ -322,7 +324,8 @@ elif st.session_state.active_page == "Purchase Request":
             submitted_pr = st.form_submit_button("Submit Purchase Request Mingguan")
             
             if submitted_pr:
-                if prepared_by and reason and category:
+                # TAMBAHAN VALIDASI: Memastikan pr_number tidak kosong
+                if prepared_by and reason and category and pr_number:
                     st.success(f"""
                     🎉 Purchase Request **{pr_number}** dengan **{len(st.session_state.pr_items)} item** berhasil diajukan!
                     - Grand Total Estimasi: **Rp {total_all_items:,.0f}**
@@ -331,16 +334,15 @@ elif st.session_state.active_page == "Purchase Request":
                     
                     # Reset list setelah berhasil submit
                     st.session_state.pr_items = []
-                    # Optional: Rerun untuk membersihkan tampilan
-                    st.rerun() # PERBAIKAN: Mengganti st.experimental_rerun()
+                    st.rerun() 
                 else:
-                    st.error("⚠️ Mohon lengkapi semua data header PR (Prepared by, Category, dan Alasan).")
+                    st.error("⚠️ Mohon lengkapi semua data header PR (Nomor PR, Prepared by, Category, dan Alasan).")
         
         # Opsi hapus seluruh daftar
         if st.button("❌ Hapus Semua Item dari Daftar"):
             st.session_state.pr_items = []
             st.success("Daftar item PR berhasil dikosongkan.")
-            st.rerun() # PERBAIKAN: Mengganti st.experimental_rerun()
+            st.rerun()
 
     else:
         st.warning("Daftar Purchase Request masih kosong. Silakan tambahkan item di bagian 'Tambah Item Baru'.")
