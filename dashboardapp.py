@@ -7,7 +7,6 @@ from datetime import date
 st.set_page_config(page_title="Sistem Logistik Tambak Udang", layout="wide")
 
 # ========== DUMMY DATA (Data Tambahan untuk PR yang Disetujui) ==========
-# Data ini mensimulasikan item-item Purchase Request yang sudah "Approved" dan siap dibuatkan PO
 approved_pr_data = pd.DataFrame({
     "PR No.": ["PR-INA/00100", "PR-INA/00100", "PR-INA/00101", "PR-INA/00102"],
     "Deskripsi Barang": ["Pakan Udang Premium Type A", "Obat Antibiotik Air", "Benur Vaname Size 10", "Alat Aerator 5PK"],
@@ -26,7 +25,7 @@ menu_items = {
     "Stok Masuk": "⬆️ Stok Masuk",
     "Stok Keluar": "⬇️ Stok Keluar",
     "Purchase Request": "📝 Purchase Request",
-    "Purchase Order": "📄 Purchase Order", # Menu Baru
+    "Purchase Order": "📄 Purchase Order",
     "Setting": "⚙️ Setting"
 }
 
@@ -135,10 +134,8 @@ st.sidebar.markdown("<div class='sidebar-title'>🦐 Tambak Logistik</div>", uns
 menu_keys = list(menu_items.keys())
 
 # Menggunakan st.sidebar.radio untuk navigasi yang berfungsi penuh
-# format_func digunakan untuk menampilkan label dengan ikon (e.g., "📊 Dashboard")
-# key memastikan state navigasi tersimpan
 selected_page = st.sidebar.radio(
-    "Navigasi", # Label ini disembunyikan oleh CSS
+    "Navigasi", 
     options=menu_keys,
     index=menu_keys.index(st.session_state.active_page),
     format_func=lambda key: menu_items[key],
@@ -231,7 +228,7 @@ elif st.session_state.active_page == "Purchase Request":
             today_date_str = pd.Timestamp.today().strftime('%Y%m%d') 
             pr_number = st.text_input("Nomor PR", value=f"PR-INA/{today_date_str}-XXX", disabled=True, help="Nomor PR akan di-generate otomatis oleh sistem.")
             category = st.selectbox("Category", ["Sumbawa", "Kantor Bali", "Operasional Lain"], help="Lokasi/Project yang mengajukan PR.")
-            # Tanggal Request di-fix-kan hari ini dan disabled sesuai permintaan user
+            # Tanggal Request di-fix-kan hari ini dan disabled
             date_request = st.date_input("Tanggal Request", value=date.today(), disabled=True) 
             prepared_by = st.text_input("Prepared by", help="Nama karyawan yang mengajukan permintaan.")
             
@@ -280,7 +277,6 @@ elif st.session_state.active_page == "Purchase Order":
     st.info("💡 Data di bawah adalah Purchase Request yang statusnya sudah **Approved** dan siap diproses menjadi Purchase Order.")
     
     # Menampilkan data PR yang sudah disetujui (Dummy Data)
-    # Gunakan st.data_editor agar pengguna bisa memilih barang mana yang mau dibuatkan PO
     st.markdown("### Item PR Approved")
     edited_df = st.data_editor(
         approved_pr_data,
@@ -308,21 +304,19 @@ elif st.session_state.active_page == "Purchase Order":
         hide_index=True
     )
 
-    # Filter item yang dipilih
-    selected_items = edited_df[edited_df.select]
+    # PERBAIKAN: Menggunakan bracket notation ['select'] untuk menghindari AttributeError
+    selected_items = edited_df[edited_df['select']] 
     
     st.markdown("---")
 
     if not selected_items.empty:
         st.subheader(f"Form Purchase Order ({len(selected_items)} Item Terpilih)")
         
-        # Ambil data PR No. dan Supplier unik dari item yang dipilih
         pr_numbers = selected_items['PR No.'].unique()
         suppliers = selected_items['Supplier Rekomendasi'].unique()
 
         st.warning(f"Membuat PO untuk Item dari PR No.: **{', '.join(pr_numbers)}**")
         
-        # Asumsi: PO dibuat untuk satu supplier per form
         if len(suppliers) > 1:
             st.error("⚠️ Item yang dipilih memiliki lebih dari satu supplier. Harap pilih item dari satu supplier saja.")
         
@@ -343,12 +337,11 @@ elif st.session_state.active_page == "Purchase Order":
                 st.markdown("---")
                 st.markdown("#### Detail Item Finalisasi Harga")
                 
-                # Menampilkan item yang dipilih dan memungkinkan input harga final
                 final_df = selected_items.copy()
                 final_df['Harga Final (Rp)'] = final_df['Unit Price (Estimasi)']
                 final_df = final_df.drop(columns=['select', 'Unit Price (Estimasi)', 'Total Estimasi'])
 
-                # Memungkinkan pengguna mengedit Unit Price dan Total
+                # Menampilkan item yang dipilih dan memungkinkan input harga final
                 st.dataframe(
                     final_df.style.format({
                         'Harga Final (Rp)': "Rp {:,.0f}", 
