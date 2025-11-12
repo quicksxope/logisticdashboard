@@ -156,7 +156,6 @@ shipment_data = pd.DataFrame({
 
 
 # ========== FUNGSI UNTUK MENGHAPUS ITEM PR ==========
-# Menggunakan st.rerun() yang sudah diperbaiki
 def delete_pr_item(index):
     """Menghapus item PR dari list berdasarkan index."""
     if 0 <= index < len(st.session_state.pr_items):
@@ -308,7 +307,7 @@ elif st.session_state.active_page == "Purchase Request":
             col_pr_1, col_pr_2 = st.columns(2)
             
             with col_pr_1:
-                # PERUBAHAN DI SINI: Nomor PR diubah menjadi input manual dan wajib diisi
+                # PERUBAHAN DISINI: Nomor PR diubah menjadi input manual dan wajib diisi
                 pr_number = st.text_input(
                     "Nomor PR*", 
                     key="pr_number_manual", 
