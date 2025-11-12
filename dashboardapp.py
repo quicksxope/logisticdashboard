@@ -39,7 +39,7 @@ if "pr_items" not in st.session_state:
     st.session_state.pr_items = []
 
 
-# CSS untuk styling custom dan override Streamlit Radio (Dipotong untuk kejelasan, tetap sama dengan sebelumnya)
+# CSS untuk styling custom dan override Streamlit Radio
 st.markdown(f"""
 <style>
 /* Sidebar styling */
@@ -158,11 +158,12 @@ shipment_data = pd.DataFrame({
 
 
 # ========== FUNGSI UNTUK MENGHAPUS ITEM PR ==========
+# Fungsi ini tidak digunakan lagi dalam UI saat ini, tetapi diperbaiki jika diperlukan
 def delete_pr_item(index):
     """Menghapus item PR dari list berdasarkan index."""
     if 0 <= index < len(st.session_state.pr_items):
         st.session_state.pr_items.pop(index)
-        st.experimental_rerun() # Refresh halaman untuk update tabel
+        st.rerun() # PERBAIKAN: Mengganti st.experimental_rerun()
 
 
 # ========== TAMPILKAN KONTEN BERDASARKAN HALAMAN AKTIF ==========
@@ -198,7 +199,7 @@ if st.session_state.active_page == "Dashboard":
     st.dataframe(shipment_data, use_container_width=True, hide_index=True)
 
 
-# ========== HALAMAN STOK MASUK (Dipotong) ==========
+# ========== HALAMAN STOK MASUK ==========
 elif st.session_state.active_page == "Stok Masuk":
     st.title("⬆️ Input Stok Masuk")
     with st.form("form_masuk"):
@@ -210,7 +211,7 @@ elif st.session_state.active_page == "Stok Masuk":
         st.success(f"✅ Data stok masuk '{jenis}' sejumlah {jumlah} berhasil disimpan!")
 
 
-# ========== HALAMAN STOK KELUAR (Dipotong) ==========
+# ========== HALAMAN STOK KELUAR ==========
 elif st.session_state.active_page == "Stok Keluar":
     st.title("⬇️ Input Stok Keluar")
     with st.form("form_keluar"):
@@ -271,7 +272,7 @@ elif st.session_state.active_page == "Purchase Request":
                 }
                 st.session_state.pr_items.append(new_item)
                 st.success(f"✅ Item **'{description}'** berhasil ditambahkan.")
-                st.experimental_rerun()
+                st.rerun() # PERBAIKAN: Mengganti st.experimental_rerun()
             else:
                 st.error("⚠️ Mohon lengkapi semua kolom yang bertanda bintang (*).")
 
@@ -282,6 +283,11 @@ elif st.session_state.active_page == "Purchase Request":
     
     if st.session_state.pr_items:
         pr_df = pd.DataFrame(st.session_state.pr_items)
+        
+        # Hitung Grand Total dari nilai numerik sebelum diformat
+        total_all_items = sum(item["Total Price (Est)"] for item in st.session_state.pr_items)
+
+        # Format kolom untuk tampilan
         pr_df['Total Price (Est)'] = pr_df['Total Price (Est)'].apply(lambda x: f"Rp {x:,.0f}")
         pr_df['Unit Price (Est)'] = pr_df['Unit Price (Est)'].apply(lambda x: f"Rp {x:,.0f}")
 
@@ -293,7 +299,6 @@ elif st.session_state.active_page == "Purchase Request":
             column_order=["Description", "Qty", "UOM", "Unit Price (Est)", "Total Price (Est)", "Supplier Recomendation", "Exp Receive Date"]
         )
 
-        total_all_items = sum(item["Total Price (Est)"] for item in st.session_state.pr_items)
         st.subheader(f"Grand Total Estimasi PR: **Rp {total_all_items:,.0f}**")
         st.markdown("---")
         
@@ -327,7 +332,7 @@ elif st.session_state.active_page == "Purchase Request":
                     # Reset list setelah berhasil submit
                     st.session_state.pr_items = []
                     # Optional: Rerun untuk membersihkan tampilan
-                    st.experimental_rerun() 
+                    st.rerun() # PERBAIKAN: Mengganti st.experimental_rerun()
                 else:
                     st.error("⚠️ Mohon lengkapi semua data header PR (Prepared by, Category, dan Alasan).")
         
@@ -335,7 +340,7 @@ elif st.session_state.active_page == "Purchase Request":
         if st.button("❌ Hapus Semua Item dari Daftar"):
             st.session_state.pr_items = []
             st.success("Daftar item PR berhasil dikosongkan.")
-            st.experimental_rerun()
+            st.rerun() # PERBAIKAN: Mengganti st.experimental_rerun()
 
     else:
         st.warning("Daftar Purchase Request masih kosong. Silakan tambahkan item di bagian 'Tambah Item Baru'.")
@@ -437,7 +442,7 @@ elif st.session_state.active_page == "Purchase Order":
         st.warning("Silakan pilih minimal satu item PR yang sudah di-approve di tabel di atas untuk membuat Purchase Order baru.")
 
 
-# ========== HALAMAN SETTING (Dipotong) ==========
+# ========== HALAMAN SETTING ==========
 elif st.session_state.active_page == "Setting":
     st.title("⚙️ Pengaturan Sistem")
     st.write("Tempat untuk konfigurasi API Key, database, dan backup data.")
