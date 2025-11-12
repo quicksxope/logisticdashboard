@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+from datetime import date # Import untuk date_input
 
 # ========== PAGE CONFIG ==========
 st.set_page_config(page_title="Sistem Logistik Tambak Udang", layout="wide")
@@ -11,6 +12,7 @@ menu_items = {
     "Dashboard": "📊 Dashboard",
     "Stok Masuk": "⬆️ Stok Masuk",
     "Stok Keluar": "⬇️ Stok Keluar",
+    "Purchase Request": "📝 Purchase Request", # Menu Baru
     "Setting": "⚙️ Setting"
 }
 
@@ -161,13 +163,13 @@ if st.session_state.active_page == "Dashboard":
     st.markdown("### 📈 Statistik Pengiriman")
     shipment_stats = go.Figure()
     shipment_stats.add_trace(go.Scatter(x=["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep"],
-                                         y=[30, 40, 45, 50, 65, 70, 80, 81, 90],
-                                         name="Total Shipment",
-                                         line=dict(color="#636EFA", width=3)))
+                                             y=[30, 40, 45, 50, 65, 70, 80, 81, 90],
+                                             name="Total Shipment",
+                                             line=dict(color="#636EFA", width=3)))
     shipment_stats.add_trace(go.Scatter(x=["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep"],
-                                         y=[20, 25, 35, 40, 55, 65, 70, 78, 85],
-                                         name="Delivery Shipment",
-                                         line=dict(color="#00CC96", width=3)))
+                                             y=[20, 25, 35, 40, 55, 65, 70, 78, 85],
+                                             name="Delivery Shipment",
+                                             line=dict(color="#00CC96", width=3)))
     shipment_stats.update_layout(template="plotly_white", height=350, margin=dict(l=0, r=0, t=30, b=0))
     st.plotly_chart(shipment_stats, use_container_width=True)
 
@@ -197,6 +199,62 @@ elif st.session_state.active_page == "Stok Keluar":
         submitted = st.form_submit_button("Simpan")
     if submitted:
         st.success(f"✅ Data stok keluar '{jenis}' sejumlah {jumlah} berhasil disimpan!")
+
+# ========== HALAMAN PURCHASE REQUEST (BARU) ==========
+elif st.session_state.active_page == "Purchase Request":
+    st.title("📝 Input Purchase Request")
+    st.subheader("Informasi Umum Permintaan")
+    
+    with st.form("form_purchase_request"):
+        col_pr_1, col_pr_2 = st.columns(2)
+        
+        # Kolom Kiri
+        with col_pr_1:
+            # Nomor PR: Menggunakan format tanggal saat ini sebagai contoh
+            today_date_str = pd.Timestamp.today().strftime('%Y%m%d') 
+            pr_number = st.text_input("Nomor PR", value=f"PR-INA/{today_date_str}-XXX", disabled=True, help="Nomor PR akan di-generate otomatis oleh sistem.")
+            category = st.selectbox("Category", ["Sumbawa", "Kantor Bali", "Operasional Lain"], help="Lokasi/Project yang mengajukan PR.")
+            date_request = st.date_input("Tanggal Request", value=date.today())
+            prepared_by = st.text_input("Prepared by", help="Nama karyawan yang mengajukan permintaan.")
+            
+        # Kolom Kanan
+        with col_pr_2:
+            supplier = st.text_input("Supplier/Vendor Direkomendasikan")
+            exp_receive_date = st.date_input("Tanggal Penerimaan Target")
+            contact_person = st.text_input("Kontak Supplier (Opsional)", help="Nomor Telepon atau Email Supplier.")
+            reason = st.text_area("Alasan / Tujuan Pembelian", help="Contoh: Pembelian Alat Pencuci Mobil, Maintenance Excavator.")
+        
+        st.markdown("---")
+        st.subheader("Detail Item yang Dibutuhkan")
+        
+        # Grid untuk detail item
+        col_item_1, col_item_2, col_item_3, col_item_4 = st.columns(4)
+        with col_item_1:
+            description = st.text_input("Deskripsi Barang/Jasa")
+        with col_item_2:
+            qty = st.number_input("Kuantitas (Qty)", min_value=1, value=1)
+        with col_item_3:
+            uom = st.text_input("Satuan (UOM)", value="unit")
+        with col_item_4:
+            unit_price = st.number_input("Harga Satuan (Unit Price)", min_value=0, format="%i")
+
+        total_price = qty * unit_price
+        st.info(f"**Total Harga Estimasi:** Rp {total_price:,.0f}")
+        
+        st.markdown("---")
+        submitted = st.form_submit_button("Submit Purchase Request")
+        
+    if submitted:
+        if description and prepared_by and supplier and reason and total_price > 0:
+            st.success(f"""
+            ✅ Purchase Request **{pr_number}** berhasil dibuat!
+            - Barang: {description} ({qty} {uom})
+            - Total Estimasi: Rp {total_price:,.0f}
+            - Supplier: {supplier}
+            - Dibuat oleh: {prepared_by}
+            """)
+        else:
+            st.error("⚠️ Mohon isi semua kolom penting: Deskripsi Barang, Prepared by, Supplier, Alasan, dan Harga Satuan (harus lebih dari 0).")
 
 
 # ========== HALAMAN SETTING ==========
