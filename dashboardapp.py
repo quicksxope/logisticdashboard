@@ -39,7 +39,7 @@ if "pr_items" not in st.session_state:
     st.session_state.pr_items = []
 
 
-# CSS untuk styling custom dan override Streamlit Radio
+# CSS untuk styling custom dan override Streamlit Radio (BLOK KODE YANG DIPERBAIKI)
 st.markdown(f"""
 <style>
 /* Sidebar styling */
@@ -123,12 +123,11 @@ tbody tr td {{
 /* Main background */
 .stApp {{
     background-color: #F9FAFB;
-    /* MENGHAPUS 'color: white;' agar teks utama dan judul kembali ke warna default */
 }}
 
-/* Memastikan Label Input putih agar terlihat di background gelap */
+/* Memastikan Label Input menjadi gelap (default) */
 label {{
-    color: black !important; /* Diubah menjadi hitam agar terlihat di background putih (default) */
+    color: black !important; 
 }}
 
 /* ======================================================= */
@@ -142,34 +141,34 @@ label {{
 /* Menargetkan value yang dipilih di Selectbox */
 [data-testid="stSelectbox"] .st-er, 
 [data-testid="stSelectbox"] .st-bo, 
-[data-testid="stSelectbox"] div[data-baseweb="select"] span {
+[data-testid="stSelectbox"] div[data-baseweb="select"] span {{
     color: black !important; 
-    background-color: white !important; /* Latar belakang input putih */
-}
+    background-color: white !important; 
+}}
 
 /* Menargetkan list dropdown yang terbuka */
 div[data-baseweb="popover"] .st-bd,
-div[data-baseweb="popover"] li {
+div[data-baseweb="popover"] li {{
     color: black !important;
-}
+}}
 
 /* Mengatur warna placeholder di dalam INPUT (Abu-abu gelap) */
 [data-testid="stTextInput"] input::placeholder, 
 [data-testid="stNumberInput"] input::placeholder,
-[data-testid="stTextArea"] textarea::placeholder {
+[data-testid="stTextArea"] textarea::placeholder {{
     color: #4a4a4a !important; 
-}
+}}
 
 /* Selektor global untuk judul/teks yang ingin dipertahankan warnanya */
-/* Jika Anda menggunakan tema gelap (dark theme), teks di bawah ini akan hitam di dark theme */
 h1, h2, h3, h4, 
 [data-testid="stText"], 
-[data-testid="stMarkdownContainer"] {
-    /* MENGHAPUS 'color: white !important;' */
-}
+[data-testid="stMarkdownContainer"] {{
+    /* Kosong. Menggunakan warna default Streamlit. */
+}}
 
 </style>
 """, unsafe_allow_html=True)
+
 
 # ========== SIDEBAR MENU (FIXED) ==========
 st.sidebar.markdown("<div class='sidebar-title'>🦐 Tambak Logistik</div>", unsafe_allow_html=True)
@@ -365,7 +364,7 @@ elif st.session_state.active_page == "Purchase Request":
             col_pr_1, col_pr_2 = st.columns(2)
             
             with col_pr_1:
-                # PERUBAHAN UTAMA DISINI: Nomor PR diinput manual lagi dan wajib diisi
+                # Nomor PR diinput manual dan wajib diisi
                 pr_number_final = st.text_input(
                     "Nomor PR Final*", 
                     key="pr_number_final_manual",
