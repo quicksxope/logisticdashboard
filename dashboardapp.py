@@ -123,17 +123,17 @@ tbody tr td {{
     text-align: center !important;
 }}
 
-/* Main background */
+/* Main background (Teks Global Putih) */
 .stApp {{
     background-color: #F9FAFB;
-    color: white; /* <--- PERUBAHAN UTAMA: Warna teks default untuk app body */
+    color: white; 
 }}
 
-/* Target Judul dan Konten utama lainnya */
+/* Target Judul dan Konten utama lainnya (Putih) */
 h1, h2, h3, h4, 
 [data-testid="stText"], 
 [data-testid="stMarkdownContainer"] {{
-    color: white !important; /* <--- PERUBAHAN TAMBAHAN: Memastikan judul dan teks non-input menjadi putih */
+    color: white !important; 
 }}
 
 /* Memastikan Input/Selectbox Label juga putih */
@@ -141,9 +141,29 @@ label {{
     color: white !important;
 }}
 
+/* ======================================================= */
+/* PERBAIKAN: Memastikan teks di dalam input berwarna HITAM */
+/* ======================================================= */
+[data-testid="stTextInput"] input, 
+[data-testid="stNumberInput"] input,
+[data-testid="stSelectbox"] div[role="listbox"],
+[data-testid="stTextArea"] textarea,
+.st-ax,
+.st-bd,
+.st-be {{
+    color: black !important; 
+    background-color: white !important; /* Agar kontras */
+}}
+
+/* Mengatur warna placeholder di dalam INPUT (Abu-abu gelap) */
+[data-testid="stTextInput"] input::placeholder, 
+[data-testid="stNumberInput"] input::placeholder,
+[data-testid="stTextArea"] textarea::placeholder {{
+    color: #4a4a4a !important; 
+}}
+
 </style>
 """, unsafe_allow_html=True)
-
 
 # ========== SIDEBAR MENU (FIXED) ==========
 st.sidebar.markdown("<div class='sidebar-title'>🦐 Tambak Logistik</div>", unsafe_allow_html=True)
