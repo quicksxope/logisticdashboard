@@ -125,11 +125,7 @@ tbody tr td {{
 /* Main background */
 .stApp {{
     background-color: #F9FAFB;
-    /* Tidak ada properti 'color' di sini, sehingga teks utama mengikuti default Streamlit */
 }}
-
-/* Semua penyesuaian warna teks lainnya (judul, label, input) DIHAPUS */
-/* sehingga teks tersebut akan berwarna gelap/hitam secara default */
 
 </style>
 """, unsafe_allow_html=True)
@@ -228,7 +224,7 @@ elif st.session_state.active_page == "Stok Keluar":
 # ===============================================
 elif st.session_state.active_page == "Purchase Request":
     st.title("📝 Input Purchase Request")
-    st.write("Silakan input setiap item barang satu per satu. Nomor PR diisi per item, dan diulang saat konfirmasi final.")
+    st.write("Silakan input setiap item barang satu per satu.")
 
     # --- 1. Form Item Barang (Input Per Barang) ---
     with st.expander("➕ Tambah Item Baru", expanded=True):
@@ -287,38 +283,61 @@ elif st.session_state.active_page == "Purchase Request":
     st.markdown("### Daftar Item PR Siap Proses")
     
     if st.session_state.pr_items:
-        pr_df = pd.DataFrame(st.session_state.pr_items)
         
-        # Hitung Grand Total dari nilai numerik sebelum diformat
+        # Hitung Grand Total dari nilai numerik
         total_all_items = sum(item["Total Price (Est)"] for item in st.session_state.pr_items)
         
-        # Ambil Nomor PR yang unik (hanya untuk info/warning)
+        # Ambil Nomor PR yang unik
         pr_numbers_in_list = list(set(item.get("PR Number") for item in st.session_state.pr_items if item.get("PR Number")))
         
-        # Tampilkan warning jika ada PR Number berbeda, tapi tidak memblokir submit
+        # Tampilkan warning/info konsolidasi PR
         if len(pr_numbers_in_list) > 1:
-             st.warning(f"⚠️ Ditemukan **{len(pr_numbers_in_list)}** Nomor PR berbeda dalam daftar: {', '.join(pr_numbers_in_list)}. Harap pastikan Nomor PR yang diinput di bawah adalah yang benar.")
+            st.warning(f"⚠️ Ditemukan **{len(pr_numbers_in_list)}** Nomor PR berbeda dalam daftar: {', '.join(pr_numbers_in_list)}. Harap pastikan Nomor PR yang diinput di bawah adalah yang benar.")
         elif len(pr_numbers_in_list) == 1:
-             st.info(f"Semua item akan dikonsolidasikan dalam satu Purchase Request. Nomor PR yang disarankan: **{pr_numbers_in_list[0]}**")
+            st.info(f"Semua item akan dikonsolidasikan dalam satu Purchase Request. Nomor PR yang disarankan: **{pr_numbers_in_list[0]}**")
         else:
-             st.warning("⚠️ Belum ada Nomor PR diinput di semua item. Harap input Nomor PR di form submission final.")
+            st.warning("⚠️ Belum ada Nomor PR diinput di semua item. Harap input Nomor PR di form submission final.")
 
+        
+        # --- MODIFIKASI: Menampilkan Tabel dengan Tombol Hapus menggunakan st.columns ---
+        
+        # Header Tabel
+        col_list = st.columns([1, 4, 1, 1, 2, 2, 3, 2, 1])
+        headers = ["No.", "Deskripsi", "Qty", "UOM", "Harga Satuan (Est)", "Total Harga (Est)", "Supplier Rekomendasi", "Target Terima", "Aksi"]
+        for col, header in zip(col_list, headers):
+            col.markdown(f"**{header}**")
 
-        # Format kolom untuk tampilan
-        pr_df_display = pr_df.copy()
-        pr_df_display['Total Price (Est)'] = pr_df_display['Total Price (Est)'].apply(lambda x: f"Rp {x:,.0f}")
-        pr_df_display['Unit Price (Est)'] = pr_df_display['Unit Price (Est)'].apply(lambda x: f"Rp {x:,.0f}")
+        st.markdown("---")
 
-        # Tampilkan tabel item
-        st.dataframe(
-            pr_df_display.reset_index(drop=True).style.set_properties(**{'text-align': 'center'}),
-            use_container_width=True,
-            hide_index=False,
-            column_order=["PR Number", "Description", "Qty", "UOM", "Unit Price (Est)", "Total Price (Est)", "Supplier Recomendation", "Exp Receive Date"]
-        )
+        # Body Tabel
+        for i, item in enumerate(st.session_state.pr_items):
+            col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns([1, 4, 1, 1, 2, 2, 3, 2, 1])
+            
+            with col1:
+                st.write(i + 1)
+            with col2:
+                st.write(item["Description"])
+                st.markdown(f"**PR No:** `{item['PR Number']}`") # Tampilkan PR Number
+            with col3:
+                st.write(item["Qty"])
+            with col4:
+                st.write(item["UOM"])
+            with col5:
+                st.write(f"Rp {item['Unit Price (Est)']:,.0f}")
+            with col6:
+                st.write(f"Rp {item['Total Price (Est)']:,.0f}")
+            with col7:
+                st.write(item["Supplier Recomendation"])
+            with col8:
+                st.write(item["Exp Receive Date"])
+            with col9:
+                # Tombol Hapus - menggunakan key unik
+                st.button("❌ Hapus", key=f"delete_{i}", on_click=delete_pr_item, args=(i,))
 
+        st.markdown("---")
+        
         st.subheader(f"Grand Total Estimasi PR: **Rp {total_all_items:,.0f}**")
-             
+        
         st.markdown("---")
         
         # --- 3. Form Header PR (Disubmit Sekali) ---
