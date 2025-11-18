@@ -1,28 +1,29 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import date 
+from datetime import date
+from collections import defaultdict
 
 # ========== PAGE CONFIG ==========
 st.set_page_config(page_title="Sistem Logistik Tambak Udang", layout="wide")
 
 # ========== DUMMY DATA (Data Tambahan untuk PR yang Disetujui) ==========
-# Data ini tetap sama untuk simulasi Purchase Order
 approved_pr_data = pd.DataFrame({
     "PR No.": ["PR-INA/00100", "PR-INA/00100", "PR-INA/00101", "PR-INA/00102"],
     "Deskripsi Barang": ["Pakan Udang Premium Type A", "Obat Antibiotik Air", "Benur Vaname Size 10", "Alat Aerator 5PK"],
     "Qty": [50, 10, 50000, 2],
     "UOM": ["karung", "botol", "ekor", "unit"],
-    "Unit Price (Estimasi)": [550000, 120000, 75, 4500000],
-    "Total Estimasi": [27500000, 1200000, 3750000, 9000000],
+    # Harga Final (misalnya dari negosiasi)
+    "Unit Price (Final)": [540000, 115000, 70, 4400000],
+    "Total Final": [27000000, 1150000, 3500000, 8800000],
     "Supplier Rekomendasi": ["PT Pakan Jaya", "CV Kimia Air", "Penangkar Benur Sukses", "Toko Peralatan Tambak"],
     "Tgl Target Terima": [date(2025, 12, 1), date(2025, 12, 1), date(2025, 11, 25), date(2025, 12, 10)]
 })
 
 # ========== CUSTOM STYLE (Disesuaikan untuk st.radio) ==========
-# Memanfaatkan Session State untuk menentukan item yang aktif
 menu_items = {
     "Dashboard": "📊 Dashboard",
+    "Inventori": "📦 Inventori", # NEW MENU ITEM
     "Stok Masuk": "⬆️ Stok Masuk",
     "Stok Keluar": "⬇️ Stok Keluar",
     "Purchase Request": "📝 Purchase Request",
@@ -37,6 +38,22 @@ if "active_page" not in st.session_state:
 # Inisialisasi session state untuk menyimpan daftar item PR
 if "pr_items" not in st.session_state:
     st.session_state.pr_items = []
+
+# Inisialisasi session state untuk menyimpan daftar transaksi stok (In/Out)
+if "stock_history" not in st.session_state:
+    # Default data: 50 karung pakan masuk, 10 karung keluar
+    st.session_state.stock_history = [
+        {"Jenis Barang": "Pakan Udang Premium Type A", "Qty": 50, "UOM": "karung", "Type": "Masuk", "Date": date(2025, 10, 10)},
+        {"Jenis Barang": "Benur Vaname Size 10", "Qty": 100000, "UOM": "ekor", "Type": "Masuk", "Date": date(2025, 10, 11)},
+        {"Jenis Barang": "Pakan Udang Premium Type A", "Qty": -10, "UOM": "karung", "Type": "Keluar", "Date": date(2025, 10, 20)},
+        {"Jenis Barang": "Obat Antibiotik Air", "Qty": 5, "UOM": "botol", "Type": "Masuk", "Date": date(2025, 10, 22)},
+    ]
+
+# Inisialisasi Master Data (untuk halaman Setting)
+if "master_suppliers" not in st.session_state:
+    st.session_state.master_suppliers = ["PT Pakan Jaya", "CV Kimia Air", "Penangkar Benur Sukses", "Toko Peralatan Tambak"]
+if "master_categories" not in st.session_state:
+    st.session_state.master_categories = ["Pakan", "Obat/Kimia", "Benur", "Peralatan"]
 
 
 # CSS untuk styling custom dan override Streamlit Radio
@@ -58,31 +75,25 @@ st.markdown(f"""
 }}
 
 /* Custom Styling for Streamlit Radio Buttons to look like menu items */
-/* HANYA TEXT MENU NAVIGASI YANG DIBUAT PUTIH */
-
-/* Menghapus padding default untuk container radio */
 [data-testid="stSidebar"] [data-testid="stForm"] > div > div > div {{
     padding: 0 !important;
 }}
 
-/* Target setiap opsi radio (putih) */
 [data-testid="stSidebar"] [data-testid="stRadio"] label {{
     display: flex;
     align-items: center;
     margin: 6px 12px;
     border-radius: 10px;
     padding: 10px 20px;
-    color: #fff !important; /* <--- INI MEMBUAT TEKS MENU NAVIGASI PUTIH */
+    color: #fff !important; 
     transition: all 0.2s ease;
 }}
 
-/* Warna hover sidebar */
 [data-testid="stSidebar"] [data-testid="stRadio"] label:hover {{
     background-color: #1f2937;
     color: #fff !important;
 }}
 
-/* Target container radio circle */
 [data-testid="stSidebar"] [data-testid="stRadio"] label > div:first-child {{
     display: none !important; 
 }}
@@ -94,13 +105,13 @@ st.markdown(f"""
     font-weight: 600;
 }}
 
-/* Metric cards */
+/* Metric cards (Main dashboard) */
 .metric-card {{
     background-color: #1F2937;
     border-radius: 15px;
     padding: 20px;
     text-align: center;
-    color: white; /* Teks di Metric Card tetap putih */
+    color: white;
     box-shadow: 0px 4px 8px rgba(0,0,0,0.2);
 }}
 .metric-value {{
@@ -112,13 +123,30 @@ st.markdown(f"""
     color: #9CA3AF;
 }}
 
-/* Table styling */
+/* Grand Total Card (for PO) */
+.grand-total-card {{
+    background-color: #34D399; /* Green/Teal */
+    border-radius: 15px;
+    padding: 25px;
+    margin-bottom: 20px;
+    color: white;
+    text-align: center;
+    box-shadow: 0px 4px 8px rgba(0,0,0,0.3);
+}}
+.grand-total-label {{
+    font-size: 16px;
+    font-weight: 500;
+}}
+.grand-total-value {{
+    font-size: 36px;
+    font-weight: bold;
+}}
+
+
+/* Table styling (Enhancing Streamlit Dataframe) */
 thead tr th {{
     background-color: #374151 !important;
     color: white !important;
-    text-align: center !important;
-}}
-tbody tr td {{
     text-align: center !important;
 }}
 
@@ -147,9 +175,9 @@ st.session_state.active_page = selected_page
 # DUMMY DATA UTAMA (BISA DIGUNAKAN DI DASHBOARD)
 shipment_data = pd.DataFrame({
     "Order ID": ["BA92123", "KH92129", "SD92123", "BA92124", "SD92125"],
-    "Type of Goods": ["Pakan Udang", "Obat Air", "Benur Vaname", "Vitamin Tambak", "Alat Aerator"],
-    "Place of Discharge": ["Situbondo", "Probolinggo", "Lamongan", "Sidoarjo", "Gresik"],
-    "Date": ["2025-10-12", "2025-10-15", "2025-10-18", "2025-10-19", "2025-10-20"],
+    "Jenis Barang": ["Pakan Udang", "Obat Air", "Benur Vaname", "Vitamin Tambak", "Alat Aerator"],
+    "Lokasi Tujuan": ["Situbondo", "Probolinggo", "Lamongan", "Sidoarjo", "Gresik"],
+    "Tanggal Kirim": ["2025-10-12", "2025-10-15", "2025-10-18", "2025-10-19", "2025-10-20"],
     "Status": ["On Delivery", "Complete", "Pending", "On Delivery", "Pending"]
 })
 
@@ -161,6 +189,30 @@ def delete_pr_item(index):
         st.session_state.pr_items.pop(index)
         st.rerun() 
 
+# ========== FUNGSI UNTUK MENGHITUNG INVENTORI AKTIF ==========
+def calculate_inventory_balance():
+    """Menghitung saldo inventori aktif dari riwayat transaksi."""
+    balance = defaultdict(lambda: {"Qty": 0, "UOM": "", "Category": "Uncategorized"})
+    
+    for item in st.session_state.stock_history:
+        name = item["Jenis Barang"]
+        qty = item["Qty"]
+        
+        # Tambahkan ke saldo (qty sudah positif untuk masuk dan negatif untuk keluar)
+        balance[name]["Qty"] += qty
+        balance[name]["UOM"] = item["UOM"] # Asumsi UOM untuk barang yang sama selalu sama
+        
+    # Konversi ke list of dicts/DataFrame untuk ditampilkan
+    inventory_list = []
+    for name, data in balance.items():
+        if data["Qty"] != 0: # Hanya tampilkan saldo > 0
+            inventory_list.append({
+                "Jenis Barang": name,
+                "Qty Aktif": data["Qty"],
+                "Satuan": data["UOM"]
+            })
+            
+    return pd.DataFrame(inventory_list)
 
 # ========== TAMPILKAN KONTEN BERDASARKAN HALAMAN AKTIF ==========
 if st.session_state.active_page == "Dashboard":
@@ -181,42 +233,176 @@ if st.session_state.active_page == "Dashboard":
     st.markdown("### 📈 Statistik Pengiriman")
     shipment_stats = go.Figure()
     shipment_stats.add_trace(go.Scatter(x=["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep"],
-                                             y=[30, 40, 45, 50, 65, 70, 80, 81, 90],
-                                             name="Total Shipment",
-                                             line=dict(color="#636EFA", width=3)))
+                                            y=[30, 40, 45, 50, 65, 70, 80, 81, 90],
+                                            name="Total Shipment",
+                                            line=dict(color="#636EFA", width=3)))
     shipment_stats.add_trace(go.Scatter(x=["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep"],
-                                             y=[20, 25, 35, 40, 55, 65, 70, 78, 85],
-                                             name="Delivery Shipment",
-                                             line=dict(color="#00CC96", width=3)))
+                                            y=[20, 25, 35, 40, 55, 65, 70, 78, 85],
+                                            name="Delivery Shipment",
+                                            line=dict(color="#00CC96", width=3)))
     shipment_stats.update_layout(template="plotly_white", height=350, margin=dict(l=0, r=0, t=30, b=0))
     st.plotly_chart(shipment_stats, use_container_width=True)
 
-    st.markdown("### 🚚 Daftar Pengiriman Barang")
+    st.markdown("### 🚚 Daftar Pengiriman Barang Terbaru")
     st.dataframe(shipment_data, use_container_width=True, hide_index=True)
 
 
-# ========== HALAMAN STOK MASUK ==========
+# ===============================================
+# ========== HALAMAN INVENTORI AKTIF (NEW) ==========
+# ===============================================
+elif st.session_state.active_page == "Inventori":
+    st.title("📦 Inventori Aktif (Saldo Stok Saat Ini)")
+    st.write("Ringkasan saldo stok per jenis barang di gudang utama.")
+    
+    inventory_df = calculate_inventory_balance()
+    
+    if not inventory_df.empty:
+        st.markdown(f"**Total Item Unik:** {len(inventory_df)}")
+        
+        st.dataframe(
+            inventory_df.style.format({
+                'Qty Aktif': "{:,.0f}"
+            }),
+            use_container_width=True, 
+            hide_index=True,
+            column_config={
+                "Qty Aktif": st.column_config.NumberColumn("Qty Aktif", help="Saldo stok saat ini", format="%i"),
+            }
+        )
+        
+        st.markdown("---")
+        st.info("Saldo ini dihitung dari akumulasi semua transaksi **Stok Masuk** dikurangi **Stok Keluar** yang tercatat.")
+    else:
+        st.warning("Inventori saat ini kosong. Silakan input transaksi Stok Masuk terlebih dahulu.")
+
+
+# ===============================================
+# ========== HALAMAN STOK MASUK (UPDATED) ==========
+# ===============================================
 elif st.session_state.active_page == "Stok Masuk":
     st.title("⬆️ Input Stok Masuk")
+    
     with st.form("form_masuk"):
-        jenis = st.text_input("Jenis Barang")
-        jumlah = st.number_input("Jumlah", min_value=1)
-        tanggal = st.date_input("Tanggal")
-        submitted = st.form_submit_button("Simpan")
+        col_in_1, col_in_2 = st.columns(2)
+        with col_in_1:
+            jenis = st.text_input("Jenis Barang*")
+            jumlah = st.number_input("Jumlah (Qty)*", min_value=1, value=1)
+            uom = st.text_input("Satuan (UOM)*", value="unit")
+        with col_in_2:
+            tanggal = st.date_input("Tanggal Transaksi*", value=date.today())
+            supplier_in = st.selectbox("Supplier/Sumber", options=["(Pilih Supplier)"] + st.session_state.master_suppliers)
+        
+        submitted = st.form_submit_button("Simpan Stok Masuk")
+        
     if submitted:
-        st.success(f"✅ Data stok masuk '{jenis}' sejumlah {jumlah} berhasil disimpan!")
+        if jenis and jumlah > 0 and uom and supplier_in != "(Pilih Supplier)":
+            st.session_state.stock_history.append({
+                "Jenis Barang": jenis, 
+                "Qty": jumlah, # Qty positif untuk Masuk
+                "UOM": uom,
+                "Type": "Masuk", 
+                "Date": tanggal,
+                "Supplier/Pond": supplier_in
+            })
+            st.success(f"✅ Data stok masuk **'{jenis}'** sejumlah **{jumlah} {uom}** berhasil disimpan!")
+            st.rerun()
+        else:
+            st.error("⚠️ Mohon lengkapi semua kolom yang wajib diisi, termasuk Jenis Barang, Jumlah, Satuan, dan Supplier.")
+
+    st.markdown("---")
+    st.subheader("History Stok Masuk Terbaru")
+    
+    in_history_df = pd.DataFrame([item for item in st.session_state.stock_history if item["Type"] == "Masuk"])
+    
+    if not in_history_df.empty:
+        # Tampilkan hanya kolom yang relevan
+        display_df = in_history_df.sort_values(by="Date", ascending=False).reset_index(drop=True)
+        display_df = display_df.rename(columns={"Jenis Barang": "Barang", "Qty": "Jumlah", "UOM": "Satuan", "Date": "Tanggal"})
+        
+        st.dataframe(
+            display_df[['Tanggal', 'Barang', 'Jumlah', 'Satuan', 'Supplier/Pond']], 
+            use_container_width=True, 
+            hide_index=True,
+            column_config={
+                "Jumlah": st.column_config.NumberColumn("Jumlah", format="%i"),
+                "Tanggal": st.column_config.DateColumn("Tanggal", format="YYYY/MM/DD")
+            }
+        )
+    else:
+        st.info("Belum ada riwayat Stok Masuk.")
 
 
-# ========== HALAMAN STOK KELUAR ==========
+# ===============================================
+# ========== HALAMAN STOK KELUAR (UPDATED) ==========
+# ===============================================
 elif st.session_state.active_page == "Stok Keluar":
     st.title("⬇️ Input Stok Keluar")
+    
+    inventory_df = calculate_inventory_balance()
+    item_options = ["(Pilih Barang)"] + inventory_df['Jenis Barang'].tolist()
+    
     with st.form("form_keluar"):
-        jenis = st.text_input("Jenis Barang")
-        jumlah = st.number_input("Jumlah", min_value=1)
-        tanggal = st.date_input("Tanggal")
-        submitted = st.form_submit_button("Simpan")
+        col_out_1, col_out_2 = st.columns(2)
+        with col_out_1:
+            jenis = st.selectbox("Jenis Barang*", options=item_options, key="keluar_jenis")
+            
+            # Mendapatkan UOM dan stok max
+            uom_value = ""
+            max_qty = 0
+            if jenis != "(Pilih Barang)":
+                current_stock = inventory_df[inventory_df['Jenis Barang'] == jenis].iloc[0]
+                max_qty = current_stock['Qty Aktif']
+                uom_value = current_stock['Satuan']
+                st.info(f"Stok Tersedia: **{max_qty:,.0f} {uom_value}**")
+            
+            jumlah = st.number_input(f"Jumlah (Qty)* ({uom_value})", min_value=1, max_value=max_qty if max_qty > 0 else 100000, value=1, key="keluar_jumlah")
+        
+        with col_out_2:
+            tanggal = st.date_input("Tanggal Transaksi*", value=date.today())
+            lokasi = st.selectbox("Lokasi Tujuan/Kolam", options=["(Pilih Lokasi)", "Kolam A1", "Kolam A2", "Kolam B1", "Gudang Cabang"])
+            
+        submitted = st.form_submit_button("Simpan Stok Keluar")
+        
     if submitted:
-        st.success(f"✅ Data stok keluar '{jenis}' sejumlah {jumlah} berhasil disimpan!")
+        if jenis != "(Pilih Barang)" and jumlah > 0 and lokasi != "(Pilih Lokasi)":
+            if jumlah > max_qty:
+                st.error("⚠️ Gagal: Jumlah stok keluar melebihi saldo yang tersedia. Harap periksa kembali.")
+            else:
+                st.session_state.stock_history.append({
+                    "Jenis Barang": jenis, 
+                    "Qty": -jumlah, # Qty negatif untuk Keluar
+                    "UOM": uom_value,
+                    "Type": "Keluar", 
+                    "Date": tanggal,
+                    "Supplier/Pond": lokasi # Menggunakan kolom yang sama untuk tujuan
+                })
+                st.success(f"✅ Data stok keluar **'{jenis}'** sejumlah **{jumlah} {uom_value}** berhasil disimpan untuk **{lokasi}**!")
+                st.rerun()
+        else:
+            st.error("⚠️ Mohon lengkapi semua kolom yang wajib diisi, termasuk Jenis Barang dan Lokasi Tujuan.")
+
+    st.markdown("---")
+    st.subheader("History Stok Keluar Terbaru")
+    
+    out_history_df = pd.DataFrame([item for item in st.session_state.stock_history if item["Type"] == "Keluar"])
+    
+    if not out_history_df.empty:
+        # Tampilkan hanya kolom yang relevan dan ubah Qty menjadi positif untuk tampilan
+        display_df = out_history_df.sort_values(by="Date", ascending=False).reset_index(drop=True)
+        display_df['Qty Keluar'] = display_df['Qty'].abs()
+        display_df = display_df.rename(columns={"Jenis Barang": "Barang", "UOM": "Satuan", "Date": "Tanggal", "Supplier/Pond": "Lokasi Tujuan"})
+        
+        st.dataframe(
+            display_df[['Tanggal', 'Barang', 'Qty Keluar', 'Satuan', 'Lokasi Tujuan']], 
+            use_container_width=True, 
+            hide_index=True,
+            column_config={
+                "Qty Keluar": st.column_config.NumberColumn("Jumlah", format="%i"),
+                "Tanggal": st.column_config.DateColumn("Tanggal", format="YYYY/MM/DD")
+            }
+        )
+    else:
+        st.info("Belum ada riwayat Stok Keluar.")
 
 
 # ===============================================
@@ -231,11 +417,10 @@ elif st.session_state.active_page == "Purchase Request":
         with st.form("form_add_item", clear_on_submit=True):
             st.markdown("### Detail Item yang Dibutuhkan")
             
-            # Nomor PR diinput di detail item (Ini hanya sebagai data pendukung di level item)
-            pr_number_item = st.text_input("Nomor PR (Manual per Item)*", key="item_pr_number", help="Masukkan nomor PR yang menyatukan item ini (untuk reference).")
-
-            # Grid untuk detail item
-            col_item_1, col_item_2, col_item_3, col_item_4 = st.columns(4)
+            col_item_0, col_item_1, col_item_2, col_item_3, col_item_4 = st.columns([2, 3, 1.5, 1, 2.5])
+            with col_item_0:
+                 # Nomor PR diinput di detail item (Ini hanya sebagai data pendukung di level item)
+                pr_number_item = st.text_input("Nomor PR (Per Item)*", key="item_pr_number", help="Masukkan nomor PR yang menyatukan item ini.")
             with col_item_1:
                 description = st.text_input("Deskripsi Barang/Jasa*")
             with col_item_2:
@@ -245,10 +430,10 @@ elif st.session_state.active_page == "Purchase Request":
             with col_item_4:
                 unit_price = st.number_input("Harga Satuan (Estimasi, Rp)*", min_value=0, format="%i", key="item_price")
 
-            # Input Supplier dan Target Terima dipindah ke sini agar bisa di-input per item
+            # Input Supplier dan Target Terima
             col_sup_1, col_sup_2 = st.columns(2)
             with col_sup_1:
-                supplier = st.text_input("Supplier/Vendor Direkomendasikan*")
+                supplier = st.selectbox("Supplier/Vendor Direkomendasikan*", options=["(Pilih Supplier)"] + st.session_state.master_suppliers, key="item_supplier")
             with col_sup_2:
                 exp_receive_date = st.date_input("Tanggal Penerimaan Target*", min_value=date.today())
             
@@ -256,13 +441,11 @@ elif st.session_state.active_page == "Purchase Request":
             st.info(f"**Total Harga Estimasi Item:** Rp {total_price:,.0f}")
             
             submitted_item = st.form_submit_button("Tambahkan ke Daftar PR")
-        
+            
         if submitted_item:
-            # Tambah validasi untuk pr_number_item
-            if description and supplier and total_price > 0 and pr_number_item:
-                # Tambahkan item baru ke Session State
+            if description and supplier != "(Pilih Supplier)" and total_price > 0 and pr_number_item:
                 new_item = {
-                    "PR Number": pr_number_item, # Masukkan Nomor PR ke item
+                    "PR Number": pr_number_item, 
                     "Description": description,
                     "Qty": qty,
                     "UOM": uom,
@@ -275,7 +458,7 @@ elif st.session_state.active_page == "Purchase Request":
                 st.success(f"✅ Item **'{description}'** berhasil ditambahkan dengan PR No. **{pr_number_item}**.")
                 st.rerun() 
             else:
-                st.error("⚠️ Mohon lengkapi semua kolom yang bertanda bintang (*), termasuk Nomor PR per Item.")
+                st.error("⚠️ Mohon lengkapi semua kolom yang bertanda bintang (*).")
 
     st.markdown("---")
     
@@ -299,29 +482,32 @@ elif st.session_state.active_page == "Purchase Request":
             st.warning("⚠️ Belum ada Nomor PR diinput di semua item. Harap input Nomor PR di form submission final.")
 
         
-        # --- MODIFIKASI: Menampilkan Tabel dengan Tombol Hapus menggunakan st.columns ---
+        # --- Menampilkan Tabel dengan Tombol Hapus menggunakan st.columns ---
         
         # Header Tabel
         col_list = st.columns([1, 4, 1, 1, 2, 2, 3, 2, 1])
-        headers = ["No.", "Deskripsi", "Qty", "UOM", "Harga Satuan (Est)", "Total Harga (Est)", "Supplier Rekomendasi", "Target Terima", "Aksi"]
+        headers = ["No.", "Deskripsi & PR No.", "Qty", "UOM", "Harga Satuan (Est)", "Total Harga (Est)", "Supplier Rekomendasi", "Target Terima", "Aksi"]
         for col, header in zip(col_list, headers):
             col.markdown(f"**{header}**")
 
         st.markdown("---")
-
+        
         # Body Tabel
         for i, item in enumerate(st.session_state.pr_items):
+            # Memastikan UOM ada untuk kolom UOM
+            uom_display = item.get("UOM", "N/A")
+            
             col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns([1, 4, 1, 1, 2, 2, 3, 2, 1])
             
             with col1:
                 st.write(i + 1)
             with col2:
-                st.write(item["Description"])
-                st.markdown(f"**PR No:** `{item['PR Number']}`") # Tampilkan PR Number
+                st.markdown(f"**{item['Description']}**")
+                st.markdown(f"PR No: `{item['PR Number']}`") 
             with col3:
                 st.write(item["Qty"])
             with col4:
-                st.write(item["UOM"])
+                st.write(uom_display)
             with col5:
                 st.write(f"Rp {item['Unit Price (Est)']:,.0f}")
             with col6:
@@ -332,11 +518,11 @@ elif st.session_state.active_page == "Purchase Request":
                 st.write(item["Exp Receive Date"])
             with col9:
                 # Tombol Hapus - menggunakan key unik
-                st.button("❌ Hapus", key=f"delete_{i}", on_click=delete_pr_item, args=(i,))
+                st.button("❌", key=f"delete_{i}", on_click=delete_pr_item, args=(i,), help="Hapus item ini")
 
         st.markdown("---")
         
-        st.subheader(f"Grand Total Estimasi PR: **Rp {total_all_items:,.0f}**")
+        st.subheader(f"💰 Grand Total Estimasi PR: **Rp {total_all_items:,.0f}**")
         
         st.markdown("---")
         
@@ -347,24 +533,23 @@ elif st.session_state.active_page == "Purchase Request":
             col_pr_1, col_pr_2 = st.columns(2)
             
             with col_pr_1:
-                # Nomor PR diinput manual dan wajib diisi
                 pr_number_final = st.text_input(
                     "Nomor PR Final*", 
                     key="pr_number_final_manual",
-                    value=pr_numbers_in_list[0] if len(pr_numbers_in_list) == 1 else "", # Isi otomatis jika hanya 1 PR Number
-                    help="Masukkan Nomor PR yang akan digunakan untuk submission ini. Harus diisi manual."
+                    value=pr_numbers_in_list[0] if len(pr_numbers_in_list) == 1 else "", 
+                    help="Masukkan Nomor PR yang akan digunakan untuk submission ini."
                 )
-                category = st.selectbox("Category*", ["Sumbawa", "Kantor Bali", "Operasional Lain"], key="pr_category", help="Lokasi/Project yang mengajukan PR.")
+                category = st.selectbox("Category/Proyek*", ["Sumbawa", "Kantor Bali", "Operasional Lain"], key="pr_category", help="Lokasi/Project yang mengajukan PR.")
                 date_request = st.date_input("Tanggal Request*", value=date.today(), disabled=True) 
             
             with col_pr_2:
                 prepared_by = st.text_input("Prepared by*", key="pr_prepared_by", help="Nama karyawan yang mengajukan permintaan.")
                 reason = st.text_area("Alasan / Tujuan Pembelian (Utama)*", key="pr_reason", help="Contoh: Pembelian untuk kebutuhan operasional bulanan.")
-                
-            submitted_pr = st.form_submit_button("Submit Purchase Request Mingguan")
+            
+            submitted_pr = st.form_submit_button("✅ Submit Purchase Request")
             
             if submitted_pr:
-                # Validasi: Nomor PR Final, prepared by, reason, dan category harus diisi.
+                # Validasi
                 if pr_number_final and prepared_by and reason and category:
                     st.success(f"""
                     🎉 Purchase Request **{pr_number_final}** dengan **{len(st.session_state.pr_items)} item** berhasil diajukan!
@@ -379,7 +564,7 @@ elif st.session_state.active_page == "Purchase Request":
                     st.error("⚠️ Gagal Submit: Mohon lengkapi semua data header PR, terutama **Nomor PR Final** yang wajib diisi.")
         
         # Opsi hapus seluruh daftar
-        if st.button("❌ Hapus Semua Item dari Daftar"):
+        if st.button("🗑️ Hapus Semua Item dari Daftar"):
             st.session_state.pr_items = []
             st.success("Daftar item PR berhasil dikosongkan.")
             st.rerun()
@@ -388,12 +573,14 @@ elif st.session_state.active_page == "Purchase Request":
         st.warning("Daftar Purchase Request masih kosong. Silakan tambahkan item di bagian 'Tambah Item Baru'.")
 
 
-# ========== HALAMAN PURCHASE ORDER (Tidak Berubah) ==========
+# ===============================================
+# ========== HALAMAN PURCHASE ORDER (MODIFIED) ==========
+# ===============================================
 elif st.session_state.active_page == "Purchase Order":
     st.title("📄 Pembuatan Purchase Order")
     st.subheader("Daftar Item Purchase Request yang Siap Dibuatkan PO")
 
-    st.info("💡 Data di bawah adalah Purchase Request yang statusnya sudah **Approved** dan siap diproses menjadi Purchase Order.")
+    st.info("💡 Data di bawah adalah Purchase Request yang statusnya sudah **Approved** dan siap diproses menjadi Purchase Order. Anda bisa menyesuaikan Harga Final di kolom **Harga Final (Rp)**.")
     
     # 1. Buat salinan data dan tambahkan kolom 'select' secara eksplisit
     po_df = approved_pr_data.copy()
@@ -411,46 +598,68 @@ elif st.session_state.active_page == "Purchase Order":
                 help="Pilih item yang akan dibuatkan Purchase Order",
                 default=False,
             ),
-            "Total Estimasi": st.column_config.NumberColumn(
-                "Total Estimasi (Rp)",
+            "Total Final": st.column_config.NumberColumn(
+                "Total Final (Rp)",
                 format="Rp %,.0f",
+                disabled=True
             ),
-            "Unit Price (Estimasi)": st.column_config.NumberColumn(
-                "Unit Price (Rp)",
+            # Kolom Unit Price (Final) dibuat editable agar bisa negosiasi harga
+            "Unit Price (Final)": st.column_config.NumberColumn(
+                "Harga Final (Rp)",
                 format="Rp %,.0f",
+                min_value=0,
+                step=1000
             ),
             "Tgl Target Terima": st.column_config.DateColumn(
                 "Tgl Target Terima",
                 format="YYYY/MM/DD",
             )
         },
-        disabled=("PR No.", "Deskripsi Barang", "Qty", "UOM", "Total Estimasi", "Supplier Rekomendasi", "Tgl Target Terima"),
+        # Kolom selain select dan harga final di-disable
+        disabled=("PR No.", "Deskripsi Barang", "Qty", "UOM", "Supplier Rekomendasi", "Tgl Target Terima", "Total Final"),
         use_container_width=True,
+        key="po_data_editor",
         hide_index=True
     )
 
     # 3. Filter DataFrame yang sudah diedit.
-    selected_items = edited_df[edited_df['select']] 
+    selected_items = edited_df[edited_df['select']].copy() 
     
+    # 4. Recalculate Total Final based on edited Unit Price (Final)
+    if not selected_items.empty:
+        # Recalculate the total in the selected dataframe based on the user's input/edit
+        selected_items['Total Final'] = selected_items['Qty'] * selected_items['Unit Price (Final)']
+        
+        # Calculate Grand Total PO
+        grand_total_po = selected_items['Total Final'].sum()
+
     st.markdown("---")
 
     if not selected_items.empty:
-        st.subheader(f"Form Purchase Order ({len(selected_items)} Item Terpilih)")
         
         pr_numbers = selected_items['PR No.'].unique()
         suppliers = selected_items['Supplier Rekomendasi'].unique()
 
-        st.warning(f"Membuat PO untuk Item dari PR No.: **{', '.join(pr_numbers)}**")
+        # Display Grand Total Card
+        st.markdown(f"""
+        <div class='grand-total-card'>
+            <div class='grand-total-label'>GRAND TOTAL NILAI PO</div>
+            <div class='grand-total-value'>Rp {grand_total_po:,.0f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
         
         if len(suppliers) > 1:
-            st.error("⚠️ Item yang dipilih memiliki lebih dari satu supplier. Harap pilih item dari satu supplier saja.")
+            st.error("⚠️ Item yang dipilih memiliki lebih dari satu supplier. Harap pilih item dari satu supplier saja untuk membuat satu PO.")
         
         else:
+            st.subheader(f"Form Purchase Order ({len(selected_items)} Item Terpilih)")
+            
             with st.form("form_purchase_order"):
                 col_po_1, col_po_2 = st.columns(2)
                 
                 with col_po_1:
-                    po_number = st.text_input("Nomor PO", value=f"PO-INA/{pd.Timestamp.today().strftime('%Y%m%d')}-XXX", disabled=True)
+                    po_number = st.text_input("Nomor PO", value=f"PO-INA/{pd.Timestamp.today().strftime('%Y%m%d')}-001", disabled=True)
                     po_supplier = st.text_input("Supplier PO", value=suppliers[0] if suppliers.size > 0 else "N/A", disabled=True)
                     po_date = st.date_input("Tanggal PO", value=date.today(), disabled=True)
                 
@@ -460,31 +669,94 @@ elif st.session_state.active_page == "Purchase Order":
                     st.text_input("PIC Penerima Barang", value="Bayu Logistik")
                 
                 st.markdown("---")
-                st.markdown("#### Detail Item Finalisasi Harga")
+                st.markdown("#### Item yang Dipesan")
                 
-                final_df = selected_items.copy()
-                final_df['Harga Final (Rp)'] = final_df['Unit Price (Estimasi)']
-                final_df = final_df.drop(columns=['select', 'Unit Price (Estimasi)', 'Total Estimasi'])
-
+                # Menampilkan kembali item yang dipilih dengan harga final yang sudah di-recalculate
+                final_df_display = selected_items[['PR No.', 'Deskripsi Barang', 'Qty', 'UOM', 'Unit Price (Final)', 'Total Final']]
+                final_df_display = final_df_display.rename(columns={
+                    'Unit Price (Final)': 'Harga Satuan Final',
+                    'Total Final': 'Total Harga'
+                })
+                
                 st.dataframe(
-                    final_df.style.format({
-                        'Harga Final (Rp)': "Rp {:,.0f}", 
+                    final_df_display.style.format({
+                        'Harga Satuan Final': "Rp {:,.0f}", 
+                        'Total Harga': "Rp {:,.0f}",
                         'Qty': "{:,.0f}"}),
                     use_container_width=True,
                     hide_index=True
                 )
                 
                 st.markdown("---")
-                submitted = st.form_submit_button("Generate Purchase Order")
+                submitted = st.form_submit_button("🎉 Generate & Submit Purchase Order")
                 
                 if submitted:
-                    st.success(f"🎉 Purchase Order **{po_number}** untuk supplier **{po_supplier}** berhasil dibuat!")
+                    st.success(f"🎉 Purchase Order **{po_number}** senilai **Rp {grand_total_po:,.0f}** untuk supplier **{po_supplier}** berhasil dibuat!")
                     st.balloons()
     else:
         st.warning("Silakan pilih minimal satu item PR yang sudah di-approve di tabel di atas untuk membuat Purchase Order baru.")
 
 
-# ========== HALAMAN SETTING ==========
+# ===============================================
+# ========== HALAMAN SETTING (UPDATED) ==========
+# ===============================================
 elif st.session_state.active_page == "Setting":
-    st.title("⚙️ Pengaturan Sistem")
-    st.write("Tempat untuk konfigurasi API Key, database, dan backup data.")
+    st.title("⚙️ Pengaturan Sistem: Master Data")
+    st.write("Kelola daftar Supplier dan Kategori Barang yang digunakan dalam sistem.")
+
+    # --- TABBED INTERFACE ---
+    tab_supplier, tab_category = st.tabs(["Master Supplier", "Master Kategori"])
+
+    # 1. Master Supplier
+    with tab_supplier:
+        st.subheader("Daftar Supplier Aktif")
+        
+        # Tampilkan daftar
+        supplier_df = pd.DataFrame({"Nama Supplier": st.session_state.master_suppliers})
+        st.dataframe(supplier_df, use_container_width=True, hide_index=True)
+        
+        st.markdown("---")
+        
+        # Form Tambah Supplier
+        with st.form("form_add_supplier", clear_on_submit=True):
+            new_supplier = st.text_input("Nama Supplier Baru")
+            col_sup_add, col_sup_empty = st.columns([1, 4])
+            with col_sup_add:
+                submit_supplier = st.form_submit_button("➕ Tambah Supplier")
+            
+            if submit_supplier:
+                if new_supplier and new_supplier not in st.session_state.master_suppliers:
+                    st.session_state.master_suppliers.append(new_supplier)
+                    st.success(f"Supplier **'{new_supplier}'** berhasil ditambahkan.")
+                    st.rerun()
+                elif new_supplier in st.session_state.master_suppliers:
+                    st.warning(f"Supplier **'{new_supplier}'** sudah ada dalam daftar.")
+                else:
+                    st.error("Nama supplier tidak boleh kosong.")
+
+    # 2. Master Kategori
+    with tab_category:
+        st.subheader("Daftar Kategori Barang Aktif")
+        
+        # Tampilkan daftar
+        category_df = pd.DataFrame({"Nama Kategori": st.session_state.master_categories})
+        st.dataframe(category_df, use_container_width=True, hide_index=True)
+        
+        st.markdown("---")
+        
+        # Form Tambah Kategori
+        with st.form("form_add_category", clear_on_submit=True):
+            new_category = st.text_input("Nama Kategori Baru")
+            col_cat_add, col_cat_empty = st.columns([1, 4])
+            with col_cat_add:
+                submit_category = st.form_submit_button("➕ Tambah Kategori")
+            
+            if submit_category:
+                if new_category and new_category not in st.session_state.master_categories:
+                    st.session_state.master_categories.append(new_category)
+                    st.success(f"Kategori **'{new_category}'** berhasil ditambahkan.")
+                    st.rerun()
+                elif new_category in st.session_state.master_categories:
+                    st.warning(f"Kategori **'{new_category}'** sudah ada dalam daftar.")
+                else:
+                    st.error("Nama kategori tidak boleh kosong.")
