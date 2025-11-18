@@ -1,0 +1,198 @@
+-- ERD -> PostgreSQL script
+-- Recommended for Amazon RDS / Aurora (Postgres)
+
+BEGIN;
+
+-- ===========================
+-- SCHEMA (optional)
+-- ===========================
+CREATE SCHEMA IF NOT EXISTS procwh;
+SET search_path = procwh, public;
+
+-- ===========================
+-- MASTER TABLES
+-- ===========================
+CREATE TABLE IF NOT EXISTS procwh.m_employee (
+    employee_id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(200) NOT NULL,
+    email VARCHAR(200),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS procwh.m_uom (
+    uom_id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS procwh.m_location (
+    location_id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(200) NOT NULL,
+    address TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS procwh.m_item (
+    item_id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(300) NOT NULL,
+    base_uom_id VARCHAR(50) REFERENCES procwh.m_uom(uom_id) ON UPDATE CASCADE ON DELETE SET NULL,
+    sku VARCHAR(100),
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS procwh.m_vendor (
+    vendor_id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(300) NOT NULL,
+    contact_info TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- ===========================
+-- PURCHASE REQUISITION (PR)
+-- ===========================
+CREATE TABLE IF NOT EXISTS procwh.t_pr_header (
+    pr_id VARCHAR(50) PRIMARY KEY,
+    employee_id VARCHAR(50) REFERENCES procwh.m_employee(employee_id) ON UPDATE CASCADE ON DELETE SET NULL,
+    pr_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    status VARCHAR(50) DEFAULT 'OPEN',
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS procwh.t_pr_detail (
+    pr_detail_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    pr_id VARCHAR(50) NOT NULL REFERENCES procwh.t_pr_header(pr_id) ON DELETE CASCADE,
+    item_id VARCHAR(50) REFERENCES procwh.m_item(item_id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    qty_requested NUMERIC(18,4) NOT NULL CHECK (qty_requested >= 0),
+    uom_id VARCHAR(50) REFERENCES procwh.m_uom(uom_id) ON UPDATE CASCADE ON DELETE SET NULL,
+    remarks TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pr_detail_pr_id ON procwh.t_pr_detail(pr_id);
+CREATE INDEX IF NOT EXISTS idx_pr_detail_item_id ON procwh.t_pr_detail(item_id);
+
+-- ===========================
+-- PURCHASE ORDER (PO)
+-- ===========================
+CREATE TABLE IF NOT EXISTS procwh.t_po_header (
+    po_id VARCHAR(50) PRIMARY KEY,
+    vendor_id VARCHAR(50) REFERENCES procwh.m_vendor(vendor_id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    pr_id VARCHAR(50) REFERENCES procwh.t_pr_header(pr_id) ON UPDATE CASCADE ON DELETE SET NULL,
+    po_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    status VARCHAR(50) DEFAULT 'ISSUED',
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS procwh.t_po_detail (
+    po_detail_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    po_id VARCHAR(50) NOT NULL REFERENCES procwh.t_po_header(po_id) ON DELETE CASCADE,
+    pr_detail_id BIGINT REFERENCES procwh.t_pr_detail(pr_detail_id) ON UPDATE CASCADE ON DELETE SET NULL,
+    item_id VARCHAR(50) REFERENCES procwh.m_item(item_id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    qty_ordered NUMERIC(18,4) NOT NULL CHECK (qty_ordered >= 0),
+    uom_id VARCHAR(50) REFERENCES procwh.m_uom(uom_id) ON UPDATE CASCADE ON DELETE SET NULL,
+    unit_price NUMERIC(18,4),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_po_detail_po_id ON procwh.t_po_detail(po_id);
+CREATE INDEX IF NOT EXISTS idx_po_detail_pr_detail_id ON procwh.t_po_detail(pr_detail_id);
+
+-- ===========================
+-- GOODS RECEIPT (GR)
+-- ===========================
+CREATE TABLE IF NOT EXISTS procwh.t_gr_header (
+    gr_id VARCHAR(50) PRIMARY KEY,
+    gr_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    po_id VARCHAR(50) REFERENCES procwh.t_po_header(po_id) ON UPDATE CASCADE ON DELETE SET NULL,
+    receiving_employee_id VARCHAR(50) REFERENCES procwh.m_employee(employee_id) ON UPDATE CASCADE ON DELETE SET NULL,
+    receiving_location_id VARCHAR(50) REFERENCES procwh.m_location(location_id) ON UPDATE CASCADE ON DELETE SET NULL,
+    doc_ref VARCHAR(200),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS procwh.t_gr_detail (
+    gr_detail_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    gr_id VARCHAR(50) NOT NULL REFERENCES procwh.t_gr_header(gr_id) ON DELETE CASCADE,
+    po_detail_id BIGINT REFERENCES procwh.t_po_detail(po_detail_id) ON UPDATE CASCADE ON DELETE SET NULL,
+    item_id VARCHAR(50) REFERENCES procwh.m_item(item_id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    qty_received NUMERIC(18,4) NOT NULL CHECK (qty_received >= 0),
+    uom_id VARCHAR(50) REFERENCES procwh.m_uom(uom_id) ON UPDATE CASCADE ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_gr_detail_gr_id ON procwh.t_gr_detail(gr_id);
+CREATE INDEX IF NOT EXISTS idx_gr_detail_po_detail_id ON procwh.t_gr_detail(po_detail_id);
+
+-- ===========================
+-- STOCK / MOVEMENT
+-- ===========================
+CREATE TYPE procwh.movement_type AS ENUM ('GR','GI','ADJ');
+
+CREATE TABLE IF NOT EXISTS procwh.t_stock_movement (
+    movement_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    movement_date TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+    item_id VARCHAR(50) REFERENCES procwh.m_item(item_id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    location_id VARCHAR(50) REFERENCES procwh.m_location(location_id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    gr_id VARCHAR(50) REFERENCES procwh.t_gr_header(gr_id) ON UPDATE CASCADE ON DELETE SET NULL,
+    employee_id VARCHAR(50) REFERENCES procwh.m_employee(employee_id) ON UPDATE CASCADE ON DELETE SET NULL,
+    qty NUMERIC(18,4) NOT NULL,
+    type procwh.movement_type NOT NULL,
+    reference TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_stock_movement_item_loc ON procwh.t_stock_movement(item_id, location_id);
+CREATE INDEX IF NOT EXISTS idx_stock_movement_gr_id ON procwh.t_stock_movement(gr_id);
+
+-- Current stock per item-location
+CREATE TABLE IF NOT EXISTS procwh.m_stock (
+    stock_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    item_id VARCHAR(50) NOT NULL REFERENCES procwh.m_item(item_id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    location_id VARCHAR(50) NOT NULL REFERENCES procwh.m_location(location_id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    current_qty NUMERIC(18,4) NOT NULL DEFAULT 0,
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    UNIQUE (item_id, location_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_m_stock_item_loc ON procwh.m_stock(item_id, location_id);
+
+-- ===========================
+-- TRIGGERS (optional) - update m_stock on GR (simple approach)
+-- Note: For production consider using stored procedures/queues or application-level stock update
+-- ===========================
+-- Function to increase stock on GR - simplistic example
+CREATE OR REPLACE FUNCTION procwh.fn_apply_gr_to_stock() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF (TG_OP = 'INSERT') THEN
+        -- upsert stock row
+        INSERT INTO procwh.m_stock (item_id, location_id, current_qty, last_updated)
+        VALUES (NEW.item_id, (SELECT receiving_location_id FROM procwh.t_gr_header WHERE gr_id = NEW.gr_id), NEW.qty_received, now())
+        ON CONFLICT (item_id, location_id)
+        DO UPDATE SET
+            current_qty = procwh.m_stock.current_qty + NEW.qty_received,
+            last_updated = now();
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- Attach trigger to gr_detail
+DROP TRIGGER IF EXISTS trg_apply_gr ON procwh.t_gr_detail;
+CREATE TRIGGER trg_apply_gr
+AFTER INSERT ON procwh.t_gr_detail
+FOR EACH ROW
+EXECUTE FUNCTION procwh.fn_apply_gr_to_stock();
+
+-- ===========================
+-- SAMPLE FINISH
+-- ===========================
+COMMIT;
+
+-- Optional: show tables
+-- \dt procwh.*
