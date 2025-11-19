@@ -23,8 +23,8 @@ master_items = run_query("SELECT item_id, name, base_uom_id FROM procwh.m_item")
 st.session_state.master_items = master_items
 
 # Master Supplier
-master_suppliers = run_query("SELECT vendor_id, name FROM procwh.m_vendor")
-st.session_state.master_suppliers = [s[1] for s in master_suppliers]
+master_vendors = run_query("SELECT vendor_id, name FROM procwh.m_vendor")
+st.session_state.master_suppliers = [s[1] for s in master_vendors]
 
 # Master Category
 master_categories = run_query("SELECT category_id, name FROM procwh.m_category")
