@@ -18,20 +18,18 @@ from db_utils import run_query
 st.set_page_config(page_title="Sistem Logistik Tambak Udang", layout="wide")
 
 # ========== DUMMY DATA (Data Tambahan untuk PR yang Disetujui) ==========
-from db_utils import run_query
+# Master Item
+master_items = run_query("SELECT item_id, name, base_uom_id FROM m_item")
+st.session_state.master_items = master_items
 
-# Ambil master item dari DB
-master_items_df = run_query("SELECT item_id, name, base_uom_id FROM m_item")
-master_suppliers_df = run_query("SELECT vendor_id, name FROM m_vendor")
-master_categories_df = run_query("SELECT category_id, name FROM m_category")
+# Master Supplier
+master_suppliers = run_query("SELECT vendor_id, name FROM m_vendor")
+st.session_state.master_suppliers = [s[1] for s in master_suppliers]
 
-# Simpan master di session state
-if "master_items" not in st.session_state:
-    st.session_state.master_items = master_items_df.to_dict('records')
-if "master_suppliers" not in st.session_state:
-    st.session_state.master_suppliers = master_suppliers_df['name'].tolist()
-if "master_categories" not in st.session_state:
-    st.session_state.master_categories = master_categories_df['name'].tolist()
+# Master Category
+master_categories = run_query("SELECT category_id, name FROM m_category")
+st.session_state.master_categories = [c[1] for c in master_categories]
+
 
 # ========== CUSTOM STYLE (Disesuaikan untuk st.radio) ==========
 menu_items = {
