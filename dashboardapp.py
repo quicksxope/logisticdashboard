@@ -7,20 +7,6 @@ import os
 from dotenv import load_dotenv
 import psycopg2
 
-load_dotenv()  # Baca .env
-
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-# Koneksi ke NeonDB
-conn = psycopg2.connect(DATABASE_URL)
-cur = conn.cursor()
-
-# Test query
-cur.execute("SELECT NOW();")
-print("Database waktu sekarang:", cur.fetchone())
-
-cur.close()
-conn.close()
 
 
 # ========== PAGE CONFIG ==========
