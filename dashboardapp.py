@@ -11,6 +11,15 @@ from db_utils import run_query
 
 
 
+# ===============================
+# HALAMAN MASTER DATA
+# ===============================
+st.title("📦 Master Data Items")
+
+# Tarik data m_item dari DB
+items = run_query("SELECT item_id, name, base_uom_id FROM m_item;")
+df_items = pd.DataFrame(items, columns=["Item ID", "Nama Item", "UOM"])
+st.dataframe(df_items, use_container_width=True)
 
 
 # ========== PAGE CONFIG ==========
@@ -48,7 +57,21 @@ if "active_page" not in st.session_state:
 if "pr_items" not in st.session_state:
     st.session_state.pr_items = []
 
+# Inisialisasi session state untuk menyimpan daftar transaksi stok (In/Out)
+if "stock_history" not in st.session_state:
+    # Default data: 50 karung pakan masuk, 10 karung keluar
+    st.session_state.stock_history = [
+        {"Jenis Barang": "Pakan Udang Premium Type A", "Qty": 50, "UOM": "karung", "Type": "Masuk", "Date": date(2025, 10, 10)},
+        {"Jenis Barang": "Benur Vaname Size 10", "Qty": 100000, "UOM": "ekor", "Type": "Masuk", "Date": date(2025, 10, 11)},
+        {"Jenis Barang": "Pakan Udang Premium Type A", "Qty": -10, "UOM": "karung", "Type": "Keluar", "Date": date(2025, 10, 20)},
+        {"Jenis Barang": "Obat Antibiotik Air", "Qty": 5, "UOM": "botol", "Type": "Masuk", "Date": date(2025, 10, 22)},
+    ]
 
+# Inisialisasi Master Data (untuk halaman Setting)
+if "master_suppliers" not in st.session_state:
+    st.session_state.master_suppliers = ["PT Pakan Jaya", "CV Kimia Air", "Penangkar Benur Sukses", "Toko Peralatan Tambak"]
+if "master_categories" not in st.session_state:
+    st.session_state.master_categories = ["Pakan", "Obat/Kimia", "Benur", "Peralatan"]
 
 
 # CSS untuk styling custom dan override Streamlit Radio
@@ -250,16 +273,6 @@ elif st.session_state.active_page == "Inventori":
     st.write("Ringkasan saldo stok per jenis barang di gudang utama.")
     
     inventory_df = calculate_inventory_balance()
-        # ===============================
-    # HALAMAN MASTER DATA
-    # ===============================
-    st.title("📦 Master Data Items")
-    
-    # Tarik data m_item dari DB
-    items = run_query("SELECT item_id, name, base_uom_id FROM m_item;")
-    df_items = pd.DataFrame(items, columns=["Item ID", "Nama Item", "UOM"])
-    st.dataframe(df_items, use_container_width=True)
-
     
     if not inventory_df.empty:
         st.markdown(f"**Total Item Unik:** {len(inventory_df)}")
