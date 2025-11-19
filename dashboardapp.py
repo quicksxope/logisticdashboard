@@ -11,15 +11,7 @@ from db_utils import run_query
 
 
 
-# ===============================
-# HALAMAN MASTER DATA
-# ===============================
-st.title("📦 Master Data Items")
 
-# Tarik data m_item dari DB
-items = run_query("SELECT item_id, name, base_uom_id FROM m_item;")
-df_items = pd.DataFrame(items, columns=["Item ID", "Nama Item", "UOM"])
-st.dataframe(df_items, use_container_width=True)
 
 
 # ========== PAGE CONFIG ==========
