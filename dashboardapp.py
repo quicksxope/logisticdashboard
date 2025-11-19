@@ -417,9 +417,8 @@ elif st.session_state.active_page == "Stok Keluar":
 
 
 # ===============================================
-# ========== HALAMAN PR (UPDATED SAFE DB) ======
+# ========== HALAMAN PR (SAFE DB UPDATED) ======
 # ===============================================
-
 elif st.session_state.active_page == "Purchase Request":
     st.title("📝 Input Purchase Request")
     st.write("Silakan input setiap item barang satu per satu.")
@@ -473,7 +472,7 @@ elif st.session_state.active_page == "Purchase Request":
                     "Unit Price (Est)": unit_price,
                     "Total Price (Est)": total_price,
                     "Vendor Recomendation": vendor,
-                    "Exp Receive Date": exp_receive_date  # ✅ date object langsung
+                    "Exp Receive Date": exp_receive_date  # date object langsung
                 })
                 st.success(f"✅ Item '{description}' ditambahkan ke PR No. {pr_number_item}")
                 st.rerun()
@@ -492,7 +491,6 @@ elif st.session_state.active_page == "Purchase Request":
         else:
             st.info(f"Semua item akan dikonsolidasikan dalam PR No: {pr_numbers_list[0]}")
 
-        # Tabel PR Items
         for i, item in enumerate(st.session_state.pr_items):
             col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns([1,4,1,1,2,2,3,2,1])
             with col1: st.write(i+1)
@@ -527,22 +525,25 @@ elif st.session_state.active_page == "Purchase Request":
                 if pr_number_final != "" and employee_name != "(Pilih Employee)" and reason != "":
                     failed_items = []
 
-                    # --- Ambil employee_id dari nama
+                    # Ambil employee_id dari nama
                     employee_id = master_employees.get(employee_name)
 
-                    # Insert header
+                    # ✅ Insert header sekali
                     run_query("""
                         INSERT INTO procwh.t_pr_header (pr_id, employee_id, pr_date, remarks)
                         VALUES (%s, %s, CURRENT_DATE, %s)
+                        ON CONFLICT (pr_id) DO NOTHING
                     """, (pr_number_final, employee_id, reason), fetch=False)
 
-                    # Insert detail
+                    # ✅ Insert detail
                     for item in st.session_state.pr_items:
                         item_id = master_items.get(item["Description"])
                         vendor_id = master_vendors.get(item["Vendor Recomendation"])
                         if item_id is None or vendor_id is None:
                             failed_items.append(item["Description"])
                             continue
+
+                        # pastikan date object masuk ke DB
                         run_query("""
                             INSERT INTO procwh.t_pr_detail
                             (pr_id, item_id, qty, uom, unit_price, total_price, vendor_id, expected_date)
@@ -550,7 +551,7 @@ elif st.session_state.active_page == "Purchase Request":
                         """, (
                             pr_number_final, item_id, item["Qty"], item["UOM"], 
                             item["Unit Price (Est)"], item["Total Price (Est)"], 
-                            vendor_id, item["Exp Receive Date"]  # ✅ date object
+                            vendor_id, item["Exp Receive Date"]
                         ), fetch=False)
 
                     if failed_items:
