@@ -417,44 +417,50 @@ elif st.session_state.active_page == "Stok Keluar":
 
 
 # ===============================================
-# ========== HALAMAN PURCHASE REQUEST FULL =====
+# ========== HALAMAN PR (UPDATED) ==========
 # ===============================================
+
 elif st.session_state.active_page == "Purchase Request":
     st.title("📝 Input Purchase Request")
     st.write("Silakan input setiap item barang satu per satu.")
+
+    # ---------------------------
+    # 0️⃣ Ambil Master Data dari DB
+    # ---------------------------
+    master_items = {row[1]: row[0] for row in run_query("SELECT item_id, name FROM procwh.m_item")}
+    master_suppliers = {row[1]: row[0] for row in run_query("SELECT vendor_id, name FROM procwh.m_vendor")}
+    st.session_state.master_suppliers = list(master_suppliers.keys())  # update pilihan di selectbox
 
     # ---------------------------
     # 1️⃣ Form Input Item PR
     # ---------------------------
     with st.expander("➕ Tambah Item Baru", expanded=True):
         with st.form("form_add_item", clear_on_submit=True):
-            st.markdown("### Detail Item yang Dibutuhkan")
-            
             col0, col1, col2, col3, col4 = st.columns([2, 3, 1.5, 1, 2.5])
             with col0:
                 pr_number_item = st.text_input("Nomor PR (Per Item)*", key="item_pr_number")
             with col1:
-                description = st.text_input("Deskripsi Barang/Jasa*")
+                description = st.selectbox("Deskripsi Barang/Jasa*", options=["(Pilih Item)"] + list(master_items.keys()))
             with col2:
                 qty = st.number_input("Qty*", min_value=1, value=1, key="item_qty")
             with col3:
                 uom = st.text_input("UOM*", value="unit", key="item_uom")
             with col4:
                 unit_price = st.number_input("Harga Satuan (Rp)*", min_value=0, format="%i", key="item_price")
-            
+
             col_sup1, col_sup2 = st.columns(2)
             with col_sup1:
-                supplier = st.selectbox("Supplier/Vendor*", options=["(Pilih Supplier)"] + st.session_state.master_suppliers)
+                supplier = st.selectbox("Supplier/Vendor*", options=["(Pilih Supplier)"] + list(master_suppliers.keys()))
             with col_sup2:
                 exp_receive_date = st.date_input("Tanggal Target Terima*", min_value=date.today())
-            
+
             total_price = qty * unit_price
             st.info(f"Total Harga Estimasi: Rp {total_price:,.0f}")
-            
+
             submitted_item = st.form_submit_button("Tambahkan ke Daftar PR")
-        
+
         if submitted_item:
-            if description and supplier != "(Pilih Supplier)" and total_price > 0 and pr_number_item:
+            if description != "(Pilih Item)" and supplier != "(Pilih Supplier)" and total_price > 0 and pr_number_item:
                 st.session_state.pr_items.append({
                     "PR Number": pr_number_item,
                     "Description": description,
@@ -471,27 +477,24 @@ elif st.session_state.active_page == "Purchase Request":
                 st.error("Lengkapi semua kolom bertanda *.")
 
     st.markdown("---")
-    
+
     # ---------------------------
     # 2️⃣ Daftar Item PR
     # ---------------------------
     st.markdown("### Daftar Item PR Siap Proses")
-    
     if st.session_state.pr_items:
         total_all = sum(item["Total Price (Est)"] for item in st.session_state.pr_items)
         pr_numbers_list = list(set(item["PR Number"] for item in st.session_state.pr_items))
-        
         if len(pr_numbers_list) > 1:
             st.warning(f"⚠️ Ditemukan beberapa Nomor PR: {', '.join(pr_numbers_list)}")
         else:
             st.info(f"Semua item akan dikonsolidasikan dalam PR No: {pr_numbers_list[0]}")
-        
+
         # Tabel PR Items
         for i, item in enumerate(st.session_state.pr_items):
             col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns([1,4,1,1,2,2,3,2,1])
             with col1: st.write(i+1)
-            with col2: 
-                st.markdown(f"**{item['Description']}**\nPR No: `{item['PR Number']}`")
+            with col2: st.markdown(f"**{item['Description']}**\nPR No: `{item['PR Number']}`")
             with col3: st.write(item["Qty"])
             with col4: st.write(item["UOM"])
             with col5: st.write(f"Rp {item['Unit Price (Est)']:,.0f}")
@@ -499,12 +502,12 @@ elif st.session_state.active_page == "Purchase Request":
             with col7: st.write(item["Supplier Recomendation"])
             with col8: st.write(item["Exp Receive Date"])
             with col9: st.button("❌", key=f"del_{i}", on_click=delete_pr_item, args=(i,))
-        
+
         st.subheader(f"💰 Grand Total Estimasi: Rp {total_all:,.0f}")
         st.markdown("---")
-        
+
         # ---------------------------
-        # 3️⃣ Form Submit PR Header
+        # 3️⃣ Form Submit PR Header ke DB
         # ---------------------------
         st.markdown("### Konfirmasi & Submit PR")
         with st.form("form_submit_pr"):
@@ -516,55 +519,44 @@ elif st.session_state.active_page == "Purchase Request":
             with colh2:
                 prepared_by = st.text_input("Prepared By*")
                 reason = st.text_area("Alasan / Tujuan Pembelian*")
-            
+
             submitted_pr = st.form_submit_button("✅ Submit PR")
-            
+
             if submitted_pr:
                 if pr_number_final and prepared_by and reason and category:
-                    # --- Simulasi master lookup ---
-                    m_item = {"Pakan Udang Premium Type A":"ITM001", "Obat Antibiotik Air":"ITM002", "Benur Vaname Size 10":"ITM003", "Alat Aerator 5PK":"ITM004"}
-                    m_supplier = {"PT Pakan Jaya":"SUP001","CV Kimia Air":"SUP002","Penangkar Benur Sukses":"SUP003","Toko Peralatan Tambak":"SUP004"}
-                    
-                    t_pr_header_db = []
-                    t_pr_detail_db = []
-                    
-                    # Simpan header
-                    t_pr_header_db.append({
-                        "pr_id": pr_number_final,
-                        "employee_id": prepared_by,
-                        "pr_date": date.today(),
-                        "category_id": category,
-                        "remarks": reason
-                    })
-                    
                     failed_items = []
+                    # Insert header
+                    run_query("""
+                        INSERT INTO procwh.t_pr_header (pr_id, employee_id, pr_date, category_id, remarks)
+                        VALUES (%s, %s, CURRENT_DATE, %s, %s)
+                    """, (pr_number_final, prepared_by, category, reason), fetch=False)
+
+                    # Insert detail
                     for item in st.session_state.pr_items:
-                        item_id = m_item.get(item["Description"])
-                        supplier_id = m_supplier.get(item["Supplier Recomendation"])
+                        item_id = master_items.get(item["Description"])
+                        vendor_id = master_suppliers.get(item["Supplier Recomendation"])
                         if item_id is None or supplier_id is None:
                             failed_items.append(item["Description"])
                             continue
-                        t_pr_detail_db.append({
-                            "pr_id": pr_number_final,
-                            "item_id": item_id,
-                            "qty": item["Qty"],
-                            "uom": item["UOM"],
-                            "unit_price": item["Unit Price (Est)"],
-                            "total_price": item["Total Price (Est)"],
-                            "supplier_id": supplier_id,
-                            "expected_date": item["Exp Receive Date"]
-                        })
-                    
+                        run_query("""
+                            INSERT INTO procwh.t_pr_detail 
+                            (pr_id, item_id, qty, uom, unit_price, total_price, vendor_id, expected_date)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (
+                            pr_number_final, item_id, item["Qty"], item["UOM"], 
+                            item["Unit Price (Est)"], item["Total Price (Est)"], 
+                            supplier_id, item["Exp Receive Date"]
+                        ), fetch=False)
+
                     if failed_items:
                         st.warning(f"⚠️ Item gagal submit (tidak ada master data): {', '.join(failed_items)}")
-                    
+
                     st.success(f"🎉 PR {pr_number_final} berhasil diajukan dengan {len(st.session_state.pr_items) - len(failed_items)} item.")
                     st.balloons()
                     st.session_state.pr_items = []
                     st.rerun()
                 else:
                     st.error("Lengkapi semua data header PR.")
-
 
 
 # ===============================================
