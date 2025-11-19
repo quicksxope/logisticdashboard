@@ -429,8 +429,12 @@ elif st.session_state.active_page == "Purchase Request":
     # ---------------------------
     master_items = {row[1]: row[0] for row in run_query("SELECT item_id, name FROM procwh.m_item")}
     master_vendors = {row[1]: row[0] for row in run_query("SELECT vendor_id, name FROM procwh.m_vendor")}
-    st.session_state.master_suppliers = list(master_vendors.keys())  # update pilihan di selectbox
-    
+    master_employees = {row[1]: row[0] for row in run_query("SELECT employee_id, name FROM procwh.m_employee")}
+
+    st.session_state.master_vendors = list(master_vendors.keys()) 
+    st.session_state.master_items = list(master_items.keys())
+    st.session_state.master_employees = list(master_employees.keys())
+
     # ---------------------------
     # 1️⃣ Form Input Item PR
     # ---------------------------
@@ -512,21 +516,26 @@ elif st.session_state.active_page == "Purchase Request":
             colh1, colh2 = st.columns(2)
             with colh1:
                 pr_number_final = st.text_input("Nomor PR Final*", value=pr_numbers_list[0] if len(pr_numbers_list)==1 else "")
+                employee_name = st.selectbox("Prepared By*", options=["(Pilih Karyawan)"] + st.session_state.master_employees)
                 date_request = st.date_input("Tanggal Request*", value=date.today(), disabled=True)
             with colh2:
-                prepared_by = st.text_input("Prepared By*")
                 reason = st.text_area("Alasan / Tujuan Pembelian*")
     
             submitted_pr = st.form_submit_button("✅ Submit PR")
     
             if submitted_pr:
-                if pr_number_final and prepared_by and reason:
+                if pr_number_final and employee_name != "(Pilih Karyawan)" and reason:
                     failed_items = []
+
+                    # Ambil employee_id
+                    employee_id = master_employees.get(employee_name)
+
                     # Insert header
                     run_query("""
                         INSERT INTO procwh.t_pr_header (pr_id, employee_id, pr_date, remarks)
                         VALUES (%s, %s, CURRENT_DATE, %s)
-                    """, (pr_number_final, prepared_by, reason), fetch=False)
+                        ON CONFLICT (pr_id) DO NOTHING
+                    """, (pr_number_final, employee_id, reason), fetch=False)
     
                     # Insert detail
                     for item in st.session_state.pr_items:
@@ -554,7 +563,6 @@ elif st.session_state.active_page == "Purchase Request":
                     st.rerun()
                 else:
                     st.error("Lengkapi semua data header PR.")
-
 
 
 # ===============================================
