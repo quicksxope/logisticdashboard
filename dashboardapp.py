@@ -406,46 +406,46 @@ elif st.session_state.active_page == "Stok Keluar":
 
 
 # ===============================================
-# ========== HALAMAN PURCHASE REQUEST (MODIFIED) ==========
+# ========== HALAMAN PURCHASE REQUEST FULL =====
 # ===============================================
 elif st.session_state.active_page == "Purchase Request":
     st.title("📝 Input Purchase Request")
     st.write("Silakan input setiap item barang satu per satu.")
 
-    # --- 1. Form Item Barang (Input Per Barang) ---
+    # ---------------------------
+    # 1️⃣ Form Input Item PR
+    # ---------------------------
     with st.expander("➕ Tambah Item Baru", expanded=True):
         with st.form("form_add_item", clear_on_submit=True):
             st.markdown("### Detail Item yang Dibutuhkan")
             
-            col_item_0, col_item_1, col_item_2, col_item_3, col_item_4 = st.columns([2, 3, 1.5, 1, 2.5])
-            with col_item_0:
-                 # Nomor PR diinput di detail item (Ini hanya sebagai data pendukung di level item)
-                pr_number_item = st.text_input("Nomor PR (Per Item)*", key="item_pr_number", help="Masukkan nomor PR yang menyatukan item ini.")
-            with col_item_1:
+            col0, col1, col2, col3, col4 = st.columns([2, 3, 1.5, 1, 2.5])
+            with col0:
+                pr_number_item = st.text_input("Nomor PR (Per Item)*", key="item_pr_number")
+            with col1:
                 description = st.text_input("Deskripsi Barang/Jasa*")
-            with col_item_2:
-                qty = st.number_input("Kuantitas (Qty)*", min_value=1, value=1, key="item_qty")
-            with col_item_3:
-                uom = st.text_input("Satuan (UOM)*", value="unit", key="item_uom")
-            with col_item_4:
-                unit_price = st.number_input("Harga Satuan (Estimasi, Rp)*", min_value=0, format="%i", key="item_price")
-
-            # Input Supplier dan Target Terima
-            col_sup_1, col_sup_2 = st.columns(2)
-            with col_sup_1:
-                supplier = st.selectbox("Supplier/Vendor Direkomendasikan*", options=["(Pilih Supplier)"] + st.session_state.master_suppliers, key="item_supplier")
-            with col_sup_2:
-                exp_receive_date = st.date_input("Tanggal Penerimaan Target*", min_value=date.today())
+            with col2:
+                qty = st.number_input("Qty*", min_value=1, value=1, key="item_qty")
+            with col3:
+                uom = st.text_input("UOM*", value="unit", key="item_uom")
+            with col4:
+                unit_price = st.number_input("Harga Satuan (Rp)*", min_value=0, format="%i", key="item_price")
+            
+            col_sup1, col_sup2 = st.columns(2)
+            with col_sup1:
+                supplier = st.selectbox("Supplier/Vendor*", options=["(Pilih Supplier)"] + st.session_state.master_suppliers)
+            with col_sup2:
+                exp_receive_date = st.date_input("Tanggal Target Terima*", min_value=date.today())
             
             total_price = qty * unit_price
-            st.info(f"**Total Harga Estimasi Item:** Rp {total_price:,.0f}")
+            st.info(f"Total Harga Estimasi: Rp {total_price:,.0f}")
             
             submitted_item = st.form_submit_button("Tambahkan ke Daftar PR")
-            
+        
         if submitted_item:
             if description and supplier != "(Pilih Supplier)" and total_price > 0 and pr_number_item:
-                new_item = {
-                    "PR Number": pr_number_item, 
+                st.session_state.pr_items.append({
+                    "PR Number": pr_number_item,
                     "Description": description,
                     "Qty": qty,
                     "UOM": uom,
@@ -453,124 +453,107 @@ elif st.session_state.active_page == "Purchase Request":
                     "Total Price (Est)": total_price,
                     "Supplier Recomendation": supplier,
                     "Exp Receive Date": exp_receive_date.strftime('%Y-%m-%d')
-                }
-                st.session_state.pr_items.append(new_item)
-                st.success(f"✅ Item **'{description}'** berhasil ditambahkan dengan PR No. **{pr_number_item}**.")
-                st.rerun() 
+                })
+                st.success(f"✅ Item '{description}' ditambahkan ke PR No. {pr_number_item}")
+                st.rerun()
             else:
-                st.error("⚠️ Mohon lengkapi semua kolom yang bertanda bintang (*).")
+                st.error("Lengkapi semua kolom bertanda *.")
 
     st.markdown("---")
     
-    # --- 2. Tampilan Daftar Item Yang Sudah Diinput ---
+    # ---------------------------
+    # 2️⃣ Daftar Item PR
+    # ---------------------------
     st.markdown("### Daftar Item PR Siap Proses")
     
     if st.session_state.pr_items:
+        total_all = sum(item["Total Price (Est)"] for item in st.session_state.pr_items)
+        pr_numbers_list = list(set(item["PR Number"] for item in st.session_state.pr_items))
         
-        # Hitung Grand Total dari nilai numerik
-        total_all_items = sum(item["Total Price (Est)"] for item in st.session_state.pr_items)
-        
-        # Ambil Nomor PR yang unik
-        pr_numbers_in_list = list(set(item.get("PR Number") for item in st.session_state.pr_items if item.get("PR Number")))
-        
-        # Tampilkan warning/info konsolidasi PR
-        if len(pr_numbers_in_list) > 1:
-            st.warning(f"⚠️ Ditemukan **{len(pr_numbers_in_list)}** Nomor PR berbeda dalam daftar: {', '.join(pr_numbers_in_list)}. Harap pastikan Nomor PR yang diinput di bawah adalah yang benar.")
-        elif len(pr_numbers_in_list) == 1:
-            st.info(f"Semua item akan dikonsolidasikan dalam satu Purchase Request. Nomor PR yang disarankan: **{pr_numbers_in_list[0]}**")
+        if len(pr_numbers_list) > 1:
+            st.warning(f"⚠️ Ditemukan beberapa Nomor PR: {', '.join(pr_numbers_list)}")
         else:
-            st.warning("⚠️ Belum ada Nomor PR diinput di semua item. Harap input Nomor PR di form submission final.")
-
+            st.info(f"Semua item akan dikonsolidasikan dalam PR No: {pr_numbers_list[0]}")
         
-        # --- Menampilkan Tabel dengan Tombol Hapus menggunakan st.columns ---
-        
-        # Header Tabel
-        col_list = st.columns([1, 4, 1, 1, 2, 2, 3, 2, 1])
-        headers = ["No.", "Deskripsi & PR No.", "Qty", "UOM", "Harga Satuan (Est)", "Total Harga (Est)", "Supplier Rekomendasi", "Target Terima", "Aksi"]
-        for col, header in zip(col_list, headers):
-            col.markdown(f"**{header}**")
-
-        st.markdown("---")
-        
-        # Body Tabel
+        # Tabel PR Items
         for i, item in enumerate(st.session_state.pr_items):
-            # Memastikan UOM ada untuk kolom UOM
-            uom_display = item.get("UOM", "N/A")
-            
-            col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns([1, 4, 1, 1, 2, 2, 3, 2, 1])
-            
-            with col1:
-                st.write(i + 1)
-            with col2:
-                st.markdown(f"**{item['Description']}**")
-                st.markdown(f"PR No: `{item['PR Number']}`") 
-            with col3:
-                st.write(item["Qty"])
-            with col4:
-                st.write(uom_display)
-            with col5:
-                st.write(f"Rp {item['Unit Price (Est)']:,.0f}")
-            with col6:
-                st.write(f"Rp {item['Total Price (Est)']:,.0f}")
-            with col7:
-                st.write(item["Supplier Recomendation"])
-            with col8:
-                st.write(item["Exp Receive Date"])
-            with col9:
-                # Tombol Hapus - menggunakan key unik
-                st.button("❌", key=f"delete_{i}", on_click=delete_pr_item, args=(i,), help="Hapus item ini")
-
+            col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns([1,4,1,1,2,2,3,2,1])
+            with col1: st.write(i+1)
+            with col2: 
+                st.markdown(f"**{item['Description']}**\nPR No: `{item['PR Number']}`")
+            with col3: st.write(item["Qty"])
+            with col4: st.write(item["UOM"])
+            with col5: st.write(f"Rp {item['Unit Price (Est)']:,.0f}")
+            with col6: st.write(f"Rp {item['Total Price (Est)']:,.0f}")
+            with col7: st.write(item["Supplier Recomendation"])
+            with col8: st.write(item["Exp Receive Date"])
+            with col9: st.button("❌", key=f"del_{i}", on_click=delete_pr_item, args=(i,))
+        
+        st.subheader(f"💰 Grand Total Estimasi: Rp {total_all:,.0f}")
         st.markdown("---")
         
-        st.subheader(f"💰 Grand Total Estimasi PR: **Rp {total_all_items:,.0f}**")
-        
-        st.markdown("---")
-        
-        # --- 3. Form Header PR (Disubmit Sekali) ---
-        st.markdown("### Konfirmasi dan Pengajuan Purchase Request")
-
+        # ---------------------------
+        # 3️⃣ Form Submit PR Header
+        # ---------------------------
+        st.markdown("### Konfirmasi & Submit PR")
         with st.form("form_submit_pr"):
-            col_pr_1, col_pr_2 = st.columns(2)
+            colh1, colh2 = st.columns(2)
+            with colh1:
+                pr_number_final = st.text_input("Nomor PR Final*", value=pr_numbers_list[0] if len(pr_numbers_list)==1 else "")
+                category = st.selectbox("Category/Proyek*", ["Sumbawa", "Kantor Bali", "Operasional Lain"])
+                date_request = st.date_input("Tanggal Request*", value=date.today(), disabled=True)
+            with colh2:
+                prepared_by = st.text_input("Prepared By*")
+                reason = st.text_area("Alasan / Tujuan Pembelian*")
             
-            with col_pr_1:
-                pr_number_final = st.text_input(
-                    "Nomor PR Final*", 
-                    key="pr_number_final_manual",
-                    value=pr_numbers_in_list[0] if len(pr_numbers_in_list) == 1 else "", 
-                    help="Masukkan Nomor PR yang akan digunakan untuk submission ini."
-                )
-                category = st.selectbox("Category/Proyek*", ["Sumbawa", "Kantor Bali", "Operasional Lain"], key="pr_category", help="Lokasi/Project yang mengajukan PR.")
-                date_request = st.date_input("Tanggal Request*", value=date.today(), disabled=True) 
-            
-            with col_pr_2:
-                prepared_by = st.text_input("Prepared by*", key="pr_prepared_by", help="Nama karyawan yang mengajukan permintaan.")
-                reason = st.text_area("Alasan / Tujuan Pembelian (Utama)*", key="pr_reason", help="Contoh: Pembelian untuk kebutuhan operasional bulanan.")
-            
-            submitted_pr = st.form_submit_button("✅ Submit Purchase Request")
+            submitted_pr = st.form_submit_button("✅ Submit PR")
             
             if submitted_pr:
-                # Validasi
                 if pr_number_final and prepared_by and reason and category:
-                    st.success(f"""
-                    🎉 Purchase Request **{pr_number_final}** dengan **{len(st.session_state.pr_items)} item** berhasil diajukan!
-                    - Grand Total Estimasi: **Rp {total_all_items:,.0f}**
-                    - Diajukan oleh: {prepared_by}
-                    """)
+                    # --- Simulasi master lookup ---
+                    m_item = {"Pakan Udang Premium Type A":"ITM001", "Obat Antibiotik Air":"ITM002", "Benur Vaname Size 10":"ITM003", "Alat Aerator 5PK":"ITM004"}
+                    m_supplier = {"PT Pakan Jaya":"SUP001","CV Kimia Air":"SUP002","Penangkar Benur Sukses":"SUP003","Toko Peralatan Tambak":"SUP004"}
                     
-                    # Reset list setelah berhasil submit
+                    t_pr_header_db = []
+                    t_pr_detail_db = []
+                    
+                    # Simpan header
+                    t_pr_header_db.append({
+                        "pr_id": pr_number_final,
+                        "employee_id": prepared_by,
+                        "pr_date": date.today(),
+                        "category_id": category,
+                        "remarks": reason
+                    })
+                    
+                    failed_items = []
+                    for item in st.session_state.pr_items:
+                        item_id = m_item.get(item["Description"])
+                        supplier_id = m_supplier.get(item["Supplier Recomendation"])
+                        if item_id is None or supplier_id is None:
+                            failed_items.append(item["Description"])
+                            continue
+                        t_pr_detail_db.append({
+                            "pr_id": pr_number_final,
+                            "item_id": item_id,
+                            "qty": item["Qty"],
+                            "uom": item["UOM"],
+                            "unit_price": item["Unit Price (Est)"],
+                            "total_price": item["Total Price (Est)"],
+                            "supplier_id": supplier_id,
+                            "expected_date": item["Exp Receive Date"]
+                        })
+                    
+                    if failed_items:
+                        st.warning(f"⚠️ Item gagal submit (tidak ada master data): {', '.join(failed_items)}")
+                    
+                    st.success(f"🎉 PR {pr_number_final} berhasil diajukan dengan {len(st.session_state.pr_items) - len(failed_items)} item.")
+                    st.balloons()
                     st.session_state.pr_items = []
-                    st.rerun() 
+                    st.rerun()
                 else:
-                    st.error("⚠️ Gagal Submit: Mohon lengkapi semua data header PR, terutama **Nomor PR Final** yang wajib diisi.")
-        
-        # Opsi hapus seluruh daftar
-        if st.button("🗑️ Hapus Semua Item dari Daftar"):
-            st.session_state.pr_items = []
-            st.success("Daftar item PR berhasil dikosongkan.")
-            st.rerun()
+                    st.error("Lengkapi semua data header PR.")
 
-    else:
-        st.warning("Daftar Purchase Request masih kosong. Silakan tambahkan item di bagian 'Tambah Item Baru'.")
 
 
 # ===============================================
