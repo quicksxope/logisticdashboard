@@ -18,17 +18,20 @@ from db_utils import run_query
 st.set_page_config(page_title="Sistem Logistik Tambak Udang", layout="wide")
 
 # ========== DUMMY DATA (Data Tambahan untuk PR yang Disetujui) ==========
-approved_pr_data = pd.DataFrame({
-    "PR No.": ["PR-INA/00100", "PR-INA/00100", "PR-INA/00101", "PR-INA/00102"],
-    "Deskripsi Barang": ["Pakan Udang Premium Type A", "Obat Antibiotik Air", "Benur Vaname Size 10", "Alat Aerator 5PK"],
-    "Qty": [50, 10, 50000, 2],
-    "UOM": ["karung", "botol", "ekor", "unit"],
-    # Harga Final (misalnya dari negosiasi)
-    "Unit Price (Final)": [540000, 115000, 70, 4400000],
-    "Total Final": [27000000, 1150000, 3500000, 8800000],
-    "Supplier Rekomendasi": ["PT Pakan Jaya", "CV Kimia Air", "Penangkar Benur Sukses", "Toko Peralatan Tambak"],
-    "Tgl Target Terima": [date(2025, 12, 1), date(2025, 12, 1), date(2025, 11, 25), date(2025, 12, 10)]
-})
+from db_utils import run_query, execute_query
+
+# Ambil master item dari DB
+master_items_df = run_query("SELECT item_id, name, base_uom_id FROM m_item")
+master_suppliers_df = run_query("SELECT vendor_id, name FROM m_vendor")
+master_categories_df = run_query("SELECT category_id, name FROM m_category")
+
+# Simpan master di session state
+if "master_items" not in st.session_state:
+    st.session_state.master_items = master_items_df.to_dict('records')
+if "master_suppliers" not in st.session_state:
+    st.session_state.master_suppliers = master_suppliers_df['name'].tolist()
+if "master_categories" not in st.session_state:
+    st.session_state.master_categories = master_categories_df['name'].tolist()
 
 # ========== CUSTOM STYLE (Disesuaikan untuk st.radio) ==========
 menu_items = {
