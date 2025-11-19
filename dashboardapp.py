@@ -454,8 +454,6 @@ elif st.session_state.active_page == "Purchase Request":
             col_vendor, col2 = st.columns(2)
             with col_vendor:
                 vendor = st.selectbox("Vendor*", options=["(Pilih Vendor)"] + list(master_vendors.keys()))
-            with col2:
-                exp_receive_date = st.date_input("Tanggal Target Terima*", min_value=date.today())
 
             total_price = qty * unit_price
             st.info(f"Total Harga Estimasi: Rp {total_price:,.0f}")
@@ -471,8 +469,7 @@ elif st.session_state.active_page == "Purchase Request":
                     "UOM": uom,
                     "Unit Price (Est)": unit_price,
                     "Total Price (Est)": total_price,
-                    "Vendor Recomendation": vendor,
-                    "Exp Receive Date": exp_receive_date  # date object langsung
+                    "Vendor Recomendation": vendor
                 })
                 st.success(f"✅ Item '{description}' ditambahkan ke PR No. {pr_number_item}")
                 st.rerun()
@@ -500,7 +497,6 @@ elif st.session_state.active_page == "Purchase Request":
             with col5: st.write(f"Rp {item['Unit Price (Est)']:,.0f}")
             with col6: st.write(f"Rp {item['Total Price (Est)']:,.0f}")
             with col7: st.write(item["Vendor Recomendation"])
-            with col8: st.write(item["Exp Receive Date"])
             with col9: st.button("❌", key=f"del_{i}", on_click=delete_pr_item, args=(i,))
 
         st.subheader(f"💰 Grand Total Estimasi: Rp {total_all:,.0f}")
@@ -515,7 +511,6 @@ elif st.session_state.active_page == "Purchase Request":
             with colh1:
                 pr_number_final = st.text_input("Nomor PR Final*", value=pr_numbers_list[0] if len(pr_numbers_list)==1 else "")
                 employee_name = st.selectbox("Prepared By*", options=["(Pilih Employee)"] + st.session_state.master_employees)
-                date_request = st.date_input("Tanggal Request*", value=date.today(), disabled=True)
             with colh2:
                 reason = st.text_area("Alasan / Tujuan Pembelian*")
 
@@ -525,17 +520,16 @@ elif st.session_state.active_page == "Purchase Request":
                 if pr_number_final != "" and employee_name != "(Pilih Employee)" and reason != "":
                     failed_items = []
 
-                    # Ambil employee_id dari nama
                     employee_id = master_employees.get(employee_name)
 
-                    # ✅ Insert header sekali
+                    # --- Insert header
                     run_query("""
                         INSERT INTO procwh.t_pr_header (pr_id, employee_id, pr_date, remarks)
                         VALUES (%s, %s, CURRENT_DATE, %s)
                         ON CONFLICT (pr_id) DO NOTHING
                     """, (pr_number_final, employee_id, reason), fetch=False)
 
-                    # ✅ Insert detail
+                    # --- Insert detail (sesuai tabel terbaru, tanpa expected_date)
                     for item in st.session_state.pr_items:
                         item_id = master_items.get(item["Description"])
                         vendor_id = master_vendors.get(item["Vendor Recomendation"])
@@ -543,15 +537,13 @@ elif st.session_state.active_page == "Purchase Request":
                             failed_items.append(item["Description"])
                             continue
 
-                        # pastikan date object masuk ke DB
                         run_query("""
                             INSERT INTO procwh.t_pr_detail
-                            (pr_id, item_id, qty, uom, unit_price, total_price, vendor_id, expected_date)
+                            (pr_id, item_id, description, qty_request, uom_id, unit_price, total_amour, vendor_id)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         """, (
-                            pr_number_final, item_id, item["Qty"], item["UOM"], 
-                            item["Unit Price (Est)"], item["Total Price (Est)"], 
-                            vendor_id, item["Exp Receive Date"]
+                            pr_number_final, item_id, item["Description"], item["Qty"], item["UOM"],
+                            item["Unit Price (Est)"], item["Total Price (Est)"], vendor_id
                         ), fetch=False)
 
                     if failed_items:
