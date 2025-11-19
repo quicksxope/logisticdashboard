@@ -3,6 +3,13 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import date
 from collections import defaultdict
+import os
+from dotenv import load_dotenv
+import psycopg2
+
+load_dotenv()  # Baca .env
+
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # ========== PAGE CONFIG ==========
 st.set_page_config(page_title="Sistem Logistik Tambak Udang", layout="wide")
