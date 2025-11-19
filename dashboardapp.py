@@ -18,7 +18,7 @@ from db_utils import run_query
 st.set_page_config(page_title="Sistem Logistik Tambak Udang", layout="wide")
 
 # ========== DUMMY DATA (Data Tambahan untuk PR yang Disetujui) ==========
-from db_utils import run_query, execute_query
+from db_utils import run_query
 
 # Ambil master item dari DB
 master_items_df = run_query("SELECT item_id, name, base_uom_id FROM m_item")
