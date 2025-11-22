@@ -557,12 +557,28 @@ elif st.session_state.active_page == "Purchase Request":
     # ---------------------------
     # 0️⃣ Ambil Master Data dari DB
     # ---------------------------
-    master_items = {row[1]: row[0] for row in run_query("SELECT item_id, name FROM procwh.m_item")}
-    master_vendors = {row[1]: row[0] for row in run_query("SELECT vendor_id, name FROM procwh.m_vendor")}
-    master_employees = {row[1]: row[0] for row in run_query("SELECT employee_id, name FROM procwh.m_employee")}
-
-    st.session_state.master_vendors = list(master_vendors.keys())
+    # ---------------------------
+    # 0️⃣ Ambil Master Data dari DB (Fix Dictionary)
+    # ---------------------------
+    
+    master_items = {
+        row["name"]: row["item_id"]
+        for row in run_query("SELECT item_id, name FROM procwh.m_item")
+    }
+    
+    master_vendors = {
+        row["name"]: row["vendor_id"]
+        for row in run_query("SELECT vendor_id, name FROM procwh.m_vendor")
+    }
+    
+    master_employees = {
+        row["name"]: row["employee_id"]
+        for row in run_query("SELECT employee_id, name FROM procwh.m_employee")
+    }
+    
+    # Simpan ke session state
     st.session_state.master_items = list(master_items.keys())
+    st.session_state.master_vendors = list(master_vendors.keys())
     st.session_state.master_employees = list(master_employees.keys())
 
     # ---------------------------
