@@ -6,7 +6,8 @@ from collections import defaultdict
 import os
 from dotenv import load_dotenv
 import psycopg2
-from db_utils import run_query
+from db_utils import run_query, run_exec
+
 
 
 
