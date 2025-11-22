@@ -34,11 +34,15 @@ st.session_state.master_categories = [c[1] for c in master_categories]
 # ========== CUSTOM STYLE (Disesuaikan untuk st.radio) ==========
 menu_items = {
     "Dashboard": "📊 Dashboard",
-    "Inventori": "📦 Inventori", # NEW MENU ITEM
+    "Inventori": "📦 Inventori",
     "Stok Masuk": "⬆️ Stok Masuk",
     "Stok Keluar": "⬇️ Stok Keluar",
     "Purchase Request": "📝 Purchase Request",
+    "PR Approval": "✔️ Approval PR",
     "Purchase Order": "📄 Purchase Order",
+    "PO Approval": "🛂 Approval PO",
+    "Goods Receipt": "📦 GR / Barang Masuk",
+    "Stock Movement": "📜 Stock Movement",
     "Setting": "⚙️ Setting"
 }
 
@@ -224,6 +228,134 @@ def calculate_inventory_balance():
             })
             
     return pd.DataFrame(inventory_list)
+
+
+
+def ui_pr_approval():
+    st.title("✔️ Approval Purchase Request (2 Level)")
+
+    df_pr = pd.DataFrame(run_query("""
+        SELECT pr_id, pr_date, status, remarks
+        FROM procwh.t_pr_header
+        WHERE status IN ('SUBMITTED','REVIEWED')
+        ORDER BY pr_date DESC
+    """))
+
+    st.subheader("Daftar PR Pending")
+    st.dataframe(df_pr, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("Form Approval")
+
+    pr_list = ["(Pilih PR)"] + df_pr["pr_id"].tolist()
+    selected = st.selectbox("Pilih PR", pr_list)
+
+    if selected != "(Pilih PR)":
+        pr_row = df_pr[df_pr["pr_id"] == selected].iloc[0]
+        status = pr_row["status"]
+
+        next_level = 1 if status == "SUBMITTED" else 2
+        st.info(f"Status sekarang: **{status}** → Approval Level **{next_level}**")
+
+        action = st.selectbox("Action", ["APPROVE", "REJECT"])
+        notes = st.text_input("Notes")
+
+        if st.button("Submit Approval PR"):
+            run_query("""
+                INSERT INTO procwh.t_pr_approval (pr_id, level, action, action_at, notes)
+                VALUES (%s, %s, %s, NOW(), %s)
+            """, (selected, next_level, action, notes), fetch=False)
+            st.success(f"PR {selected} berhasil {action}")
+            st.rerun()
+
+def ui_po_approval():
+    st.title("🛂 Approval Purchase Order (3 Level)")
+
+    df_po = pd.DataFrame(run_query("""
+        SELECT po_id, vendor_id, status
+        FROM procwh.t_po_header
+        WHERE status IN ('DRAFT','REVIEWED','VERIFIED')
+        ORDER BY created_at DESC
+    """))
+
+    st.subheader("Daftar PO Pending")
+    st.dataframe(df_po, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("Form Approval PO")
+
+    po_list = ["(Pilih PO)"] + df_po["po_id"].tolist()
+    selected = st.selectbox("Pilih PO", po_list)
+
+    if selected != "(Pilih PO)":
+        row = df_po[df_po["po_id"] == selected].iloc[0]
+        status = row["status"]
+
+        map_level = {"DRAFT": 1, "REVIEWED": 2, "VERIFIED": 3}
+        next_level = map_level[status]
+
+        st.info(f"Approval Level berikutnya: **{next_level}**")
+
+        action = st.selectbox("Action", ["APPROVE", "REJECT"])
+        notes = st.text_area("Notes")
+
+        if st.button("Submit Approval PO"):
+            run_query("""
+                INSERT INTO procwh.t_po_approval (po_id, level, action, action_at, notes)
+                VALUES (%s, %s, %s, NOW(), %s)
+            """, (selected, next_level, action, notes), fetch=False)
+
+            st.success(f"PO {selected} berhasil {action}")
+            st.rerun()
+def ui_gr():
+    st.title("📦 Goods Receipt (GR)")
+
+    df_po = pd.DataFrame(run_query("""
+        SELECT po_id, vendor_id, status FROM procwh.t_po_header
+        WHERE status = 'APPROVED'
+    """))
+
+    po_list = ["(Pilih PO)"] + df_po["po_id"].tolist()
+    selected = st.selectbox("Pilih PO yang sudah APPROVED", po_list)
+
+    if selected != "(Pilih PO)":
+        df_detail = pd.DataFrame(run_query("""
+            SELECT po_detail_id, item_id, qty_ordered
+            FROM procwh.t_po_detail
+            WHERE po_id = %s
+        """, (selected,)))
+
+        st.dataframe(df_detail, use_container_width=True)
+
+        st.markdown("### Input Qty Received")
+        qty_received = {}
+
+        for _, row in df_detail.iterrows():
+            qty_received[row["po_detail_id"]] = st.number_input(
+                f"{row['item_id']} — Ordered {row['qty_ordered']}",
+                min_value=0,
+                max_value=row["qty_ordered"],
+                value=row["qty_ordered"]
+            )
+
+        if st.button("Generate GR"):
+            run_query("SELECT procwh.fn_generate_gr_from_po(%s)", (selected,))
+            st.success(f"GR berhasil dibuat untuk PO {selected}")
+            st.balloons()
+            st.rerun()
+
+def ui_stock_movement():
+    st.title("📜 Stock Movement")
+
+    df = pd.DataFrame(run_query("""
+        SELECT movement_id, item_id, qty_change, movement_type,
+               location_id, ref_po_id, ref_gr_id, movement_date
+        FROM procwh.t_stock_movement
+        ORDER BY movement_date DESC
+    """))
+
+    st.dataframe(df, use_container_width=True)
+
 
 # ========== TAMPILKAN KONTEN BERDASARKAN HALAMAN AKTIF ==========
 if st.session_state.active_page == "Dashboard":
@@ -556,6 +688,17 @@ elif st.session_state.active_page == "Purchase Request":
                 else:
                     st.error("Lengkapi semua data header PR.")
 
+elif st.session_state.active_page == "PR Approval":
+    ui_pr_approval()
+
+elif st.session_state.active_page == "PO Approval":
+    ui_po_approval()
+
+elif st.session_state.active_page == "Goods Receipt":
+    ui_gr()
+
+elif st.session_state.active_page == "Stock Movement":
+    ui_stock_movement()
 
 # ===============================================
 # ========== HALAMAN PURCHASE ORDER (MODIFIED) ==========
