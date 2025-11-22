@@ -1,30 +1,50 @@
 import os
 import psycopg2
+from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 
 load_dotenv()
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-def get_connection():
-    return psycopg2.connect(DATABASE_URL)
 
-def run_exec(query, params=None):
-    """Execute INSERT/UPDATE/DELETE without returning result."""
-    conn = None
+# ==========================================================
+# 1) KONEKSI DATABASE
+# ==========================================================
+def get_connection():
+    """Create a PostgreSQL connection using DATABASE_URL."""
+    conn = psycopg2.connect(DATABASE_URL)
+    return conn
+
+
+# ==========================================================
+# 2) RUN QUERY (SELECT)
+# ==========================================================
+def run_query(query, params=None):
+    """Run SELECT and return list of dict rows."""
     try:
-        conn = psycopg2.connect(
-            host=os.getenv("DB_HOST"),
-            port=os.getenv("DB_PORT"),
-            database=os.getenv("DB_NAME"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASS")
-        )
+        conn = get_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(query, params)
+        results = cur.fetchall()
+        cur.close()
+        conn.close()
+        return results
+    except Exception as e:
+        raise e
+
+
+# ==========================================================
+# 3) RUN EXEC (INSERT / UPDATE / DELETE)
+# ==========================================================
+def run_exec(query, params=None):
+    """Execute INSERT / UPDATE / DELETE."""
+    try:
+        conn = get_connection()
         cur = conn.cursor()
         cur.execute(query, params)
         conn.commit()
         cur.close()
+        conn.close()
     except Exception as e:
         raise e
-    finally:
-        if conn:
-            conn.close()
