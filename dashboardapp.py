@@ -1,746 +1,397 @@
+# dashboard2.py
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import date
+from datetime import date, datetime
 from collections import defaultdict
-import os
-from dotenv import load_dotenv
-import psycopg2
-from db_utils import run_query
+from typing import List, Dict, Any
 
+# --- NOTE ---
+# This module is UI-only. It expects two DB helper functions:
+#   - run_query(sql, params=None, fetch=True) -> list of rows
+#   - run_exec(sql, params=None, fetch=False) -> None
+# For now we assume they exist in db_utils. If you don't have them,
+# replace with your own DB calls.
+try:
+    from db_utils import run_query, run_exec
+except Exception:
+    # Fallback stubs (UI-local). Replace these with real implementations.
+    def run_query(sql: str, params=None, fetch=True):
+        # Simple fake responses for UI rendering; extend as needed.
+        if "FROM procwh.m_item" in sql:
+            return [("ITM0001", "Jet Cleaner", "UNIT"), ("ITM0016", "Timbangan Sonic", "UNIT")]
+        if "FROM procwh.m_vendor" in sql:
+            return [("946b489e-52b2-4d79-9404-152ffa316e0b", "CV Sumbermas MO"),
+                    ("f294946b-6c53-410b-b534-90ec756bd217", "Tokopedia")]
+        if "FROM procwh.t_pr_header" in sql:
+            # sample approved PRs
+            return [("PR-202511-00009", 1, date.today(), "APPROVED", "Test PR", datetime.now(), datetime.now())]
+        if "FROM procwh.t_pr_detail" in sql:
+            return [
+                (1, "PR-202511-00009", "ITM0001", "Jet Cleaner Laguna 70", 3, "UNIT", 1500000, 4500000, None),
+                (2, "PR-202511-00009", "ITM0016", "Timbangan Sonic", 1, "UNIT", 3500000, 3500000, None),
+            ]
+        if "FROM procwh.t_po_header" in sql:
+            return []
+        if "FROM procwh.m_stock" in sql:
+            return []
+        return []
+    def run_exec(sql: str, params=None, fetch=False):
+        # no-op stub
+        return None
 
-
-
-
-
-
-# ========== PAGE CONFIG ==========
-st.set_page_config(page_title="Sistem Logistik Tambak Udang", layout="wide")
-
-# ========== DUMMY DATA (Data Tambahan untuk PR yang Disetujui) ==========
-# Master Item
-master_items = run_query("SELECT item_id, name, base_uom_id FROM procwh.m_item")
-st.session_state.master_items = master_items
-
-# Master Supplier
-master_vendors = run_query("SELECT vendor_id, name FROM procwh.m_vendor")
-st.session_state.master_suppliers = [s[1] for s in master_vendors]
-
-# Master Category
-master_categories = run_query("SELECT category_id, name FROM procwh.m_category")
-st.session_state.master_categories = [c[1] for c in master_categories]
-
-
-# ========== CUSTOM STYLE (Disesuaikan untuk st.radio) ==========
-menu_items = {
-    "Dashboard": "📊 Dashboard",
-    "Inventori": "📦 Inventori", # NEW MENU ITEM
-    "Stok Masuk": "⬆️ Stok Masuk",
-    "Stok Keluar": "⬇️ Stok Keluar",
-    "Purchase Request": "📝 Purchase Request",
-    "Purchase Order": "📄 Purchase Order",
-    "Setting": "⚙️ Setting"
-}
-
-# Inisialisasi session state untuk halaman aktif
-if "active_page" not in st.session_state:
-    st.session_state.active_page = "Dashboard"
-
-# Inisialisasi session state untuk menyimpan daftar item PR
-if "pr_items" not in st.session_state:
-    st.session_state.pr_items = []
-
-# Inisialisasi session state untuk menyimpan daftar transaksi stok (In/Out)
-if "stock_history" not in st.session_state:
-    # Default data: 50 karung pakan masuk, 10 karung keluar
-    st.session_state.stock_history = [
-        {"Jenis Barang": "Pakan Udang Premium Type A", "Qty": 50, "UOM": "karung", "Type": "Masuk", "Date": date(2025, 10, 10)},
-        {"Jenis Barang": "Benur Vaname Size 10", "Qty": 100000, "UOM": "ekor", "Type": "Masuk", "Date": date(2025, 10, 11)},
-        {"Jenis Barang": "Pakan Udang Premium Type A", "Qty": -10, "UOM": "karung", "Type": "Keluar", "Date": date(2025, 10, 20)},
-        {"Jenis Barang": "Obat Antibiotik Air", "Qty": 5, "UOM": "botol", "Type": "Masuk", "Date": date(2025, 10, 22)},
-    ]
-
-# Inisialisasi Master Data (untuk halaman Setting)
-if "master_suppliers" not in st.session_state:
-    st.session_state.master_suppliers = ["PT Pakan Jaya", "CV Kimia Air", "Penangkar Benur Sukses", "Toko Peralatan Tambak"]
-if "master_categories" not in st.session_state:
-    st.session_state.master_categories = ["Pakan", "Obat/Kimia", "Benur", "Peralatan"]
-
-
-# CSS untuk styling custom dan override Streamlit Radio
-st.markdown(f"""
+# ---------------------------
+# App config and style
+# ---------------------------
+st.set_page_config(page_title="Sistem Logistik - UI", layout="wide")
+st.markdown("""
 <style>
-/* Sidebar styling */
-[data-testid="stSidebar"] {{
-    background-color: #111827;
-    padding-top: 2rem;
-    width: 260px;
-}}
-.sidebar-title {{
-    color: white; /* Sidebar title tetap putih */
-    font-weight: bold;
-    font-size: 22px;
-    text-align: left;
-    padding-left: 15px;
-    margin-bottom: 25px;
-}}
-
-/* Custom Styling for Streamlit Radio Buttons to look like menu items */
-[data-testid="stSidebar"] [data-testid="stForm"] > div > div > div {{
-    padding: 0 !important;
-}}
-
-[data-testid="stSidebar"] [data-testid="stRadio"] label {{
-    display: flex;
-    align-items: center;
-    margin: 6px 12px;
-    border-radius: 10px;
-    padding: 10px 20px;
-    color: #fff !important; 
-    transition: all 0.2s ease;
-}}
-
-[data-testid="stSidebar"] [data-testid="stRadio"] label:hover {{
-    background-color: #1f2937;
-    color: #fff !important;
-}}
-
-[data-testid="stSidebar"] [data-testid="stRadio"] label > div:first-child {{
-    display: none !important; 
-}}
-
-/* Gaya untuk opsi yang aktif (terpilih) */
-[data-testid="stSidebar"] [data-testid="stRadio"] label.st-emotion-cache-1bvk7l-container:has(input[aria-checked="true"]) {{
-    background-color: #374151;
-    color: #fff !important; 
-    font-weight: 600;
-}}
-
-/* Metric cards (Main dashboard) */
-.metric-card {{
-    background-color: #1F2937;
-    border-radius: 15px;
-    padding: 20px;
-    text-align: center;
-    color: white;
-    box-shadow: 0px 4px 8px rgba(0,0,0,0.2);
-}}
-.metric-value {{
-    font-size: 28px;
-    font-weight: bold;
-}}
-.metric-label {{
-    font-size: 14px;
-    color: #9CA3AF;
-}}
-
-/* Grand Total Card (for PO) */
-.grand-total-card {{
-    background-color: #34D399; /* Green/Teal */
-    border-radius: 15px;
-    padding: 25px;
-    margin-bottom: 20px;
-    color: white;
-    text-align: center;
-    box-shadow: 0px 4px 8px rgba(0,0,0,0.3);
-}}
-.grand-total-label {{
-    font-size: 16px;
-    font-weight: 500;
-}}
-.grand-total-value {{
-    font-size: 36px;
-    font-weight: bold;
-}}
-
-
-/* Table styling (Enhancing Streamlit Dataframe) */
-thead tr th {{
-    background-color: #374151 !important;
-    color: white !important;
-    text-align: center !important;
-}}
-
-/* Main background */
-.stApp {{
-    background-color: #F9FAFB;
-}}
-
+/* minimal styling to keep UI pleasant */
+.stApp { background-color: #f7fafc; }
+.metric-card { background:#111827; color:#fff; padding:16px; border-radius:8px; }
 </style>
 """, unsafe_allow_html=True)
 
-# ========== SIDEBAR MENU (FIXED) ==========
-st.sidebar.markdown("<div class='sidebar-title'>🦐 Tambak Logistik</div>", unsafe_allow_html=True)
 
-menu_keys = list(menu_items.keys())
-selected_page = st.sidebar.radio(
-    "Navigasi", 
-    options=menu_keys,
-    index=menu_keys.index(st.session_state.active_page),
-    format_func=lambda key: menu_items[key],
-    key='app_navigation_radio'
-)
-
-st.session_state.active_page = selected_page
-
-# DUMMY DATA UTAMA (BISA DIGUNAKAN DI DASHBOARD)
-shipment_data = pd.DataFrame({
-    "Order ID": ["BA92123", "KH92129", "SD92123", "BA92124", "SD92125"],
-    "Jenis Barang": ["Pakan Udang", "Obat Air", "Benur Vaname", "Vitamin Tambak", "Alat Aerator"],
-    "Lokasi Tujuan": ["Situbondo", "Probolinggo", "Lamongan", "Sidoarjo", "Gresik"],
-    "Tanggal Kirim": ["2025-10-12", "2025-10-15", "2025-10-18", "2025-10-19", "2025-10-20"],
-    "Status": ["On Delivery", "Complete", "Pending", "On Delivery", "Pending"]
-})
+# ---------------------------
+# Session initialization
+# ---------------------------
+if "active_page" not in st.session_state:
+    st.session_state.active_page = "Dashboard"
+if "pr_items_ui" not in st.session_state:
+    st.session_state.pr_items_ui = []
+if "po_candidates" not in st.session_state:
+    st.session_state.po_candidates = []  # produced from approved PRs
+if "stock_history_ui" not in st.session_state:
+    st.session_state.stock_history_ui = []  # local copy of stock movement entries
 
 
-# ========== FUNGSI UNTUK MENGHAPUS ITEM PR ==========
-def delete_pr_item(index):
-    """Menghapus item PR dari list berdasarkan index."""
-    if 0 <= index < len(st.session_state.pr_items):
-        st.session_state.pr_items.pop(index)
-        st.rerun() 
+# ---------------------------
+# Helper functions
+# ---------------------------
+def fetch_master_items() -> List:
+    try:
+        rows = run_query("SELECT item_id, name, base_uom_id FROM procwh.m_item")
+        return rows
+    except Exception as e:
+        st.warning(f"Master items fetch failed: {e}")
+        return []
 
-# ========== FUNGSI UNTUK MENGHITUNG INVENTORI AKTIF ==========
-def calculate_inventory_balance():
-    """Menghitung saldo inventori aktif dari riwayat transaksi."""
-    balance = defaultdict(lambda: {"Qty": 0, "UOM": "", "Category": "Uncategorized"})
-    
-    for item in st.session_state.stock_history:
-        name = item["Jenis Barang"]
-        qty = item["Qty"]
-        
-        # Tambahkan ke saldo (qty sudah positif untuk masuk dan negatif untuk keluar)
-        balance[name]["Qty"] += qty
-        balance[name]["UOM"] = item["UOM"] # Asumsi UOM untuk barang yang sama selalu sama
-        
-    # Konversi ke list of dicts/DataFrame untuk ditampilkan
-    inventory_list = []
-    for name, data in balance.items():
-        if data["Qty"] != 0: # Hanya tampilkan saldo > 0
-            inventory_list.append({
-                "Jenis Barang": name,
-                "Qty Aktif": data["Qty"],
-                "Satuan": data["UOM"]
-            })
-            
-    return pd.DataFrame(inventory_list)
+def fetch_master_vendors() -> List:
+    try:
+        rows = run_query("SELECT vendor_id, name FROM procwh.m_vendor")
+        return rows
+    except Exception as e:
+        st.warning(f"Master vendors fetch failed: {e}")
+        return []
 
-# ========== TAMPILKAN KONTEN BERDASARKAN HALAMAN AKTIF ==========
-if st.session_state.active_page == "Dashboard":
-    # --- Konten Dashboard ---
-    st.title("📊 Dashboard Logistik Tambak Udang")
-    st.write("Selamat datang kembali, Bayu 👋")
+def fetch_approved_prs() -> List:
+    try:
+        rows = run_query("SELECT pr_id, employee_id, pr_date, status, remarks, created_at, updated_at FROM procwh.t_pr_header WHERE status = 'APPROVED'")
+        return rows
+    except Exception:
+        return []
 
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown("<div class='metric-card'><div class='metric-label'>Total Shipment</div><div class='metric-value'>91.123</div><div class='metric-label'>+100 Packages</div></div>", unsafe_allow_html=True)
-    with col2:
-        st.markdown("<div class='metric-card'><div class='metric-label'>Pending Shipment</div><div class='metric-value'>12.349</div><div class='metric-label'>-20 Packages</div></div>", unsafe_allow_html=True)
-    with col3:
-        st.markdown("<div class='metric-card'><div class='metric-label'>Ongoing Shipment</div><div class='metric-value'>32.021</div><div class='metric-label'>+80 Packages</div></div>", unsafe_allow_html=True)
-    with col4:
-        st.markdown("<div class='metric-card'><div class='metric-label'>Delivery Shipment</div><div class='metric-value'>46.753</div><div class='metric-label'>+140 Packages</div></div>", unsafe_allow_html=True)
+def fetch_pr_details(pr_id: str) -> List:
+    try:
+        rows = run_query("SELECT pr_detail_id, pr_id, item_id, description, qty_request, uom_id, unit_price, total_amour, vendor_id FROM procwh.t_pr_detail WHERE pr_id = %s", (pr_id,))
+        return rows
+    except Exception:
+        return []
 
-    st.markdown("### 📈 Statistik Pengiriman")
-    shipment_stats = go.Figure()
-    shipment_stats.add_trace(go.Scatter(x=["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep"],
-                                            y=[30, 40, 45, 50, 65, 70, 80, 81, 90],
-                                            name="Total Shipment",
-                                            line=dict(color="#636EFA", width=3)))
-    shipment_stats.add_trace(go.Scatter(x=["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep"],
-                                            y=[20, 25, 35, 40, 55, 65, 70, 78, 85],
-                                            name="Delivery Shipment",
-                                            line=dict(color="#00CC96", width=3)))
-    shipment_stats.update_layout(template="plotly_white", height=350, margin=dict(l=0, r=0, t=30, b=0))
-    st.plotly_chart(shipment_stats, use_container_width=True)
+def fetch_pos_draft_for_pr(pr_id: str) -> List:
+    try:
+        rows = run_query("SELECT po_id, vendor_id, status FROM procwh.t_po_header WHERE pr_id = %s", (pr_id,))
+        return rows
+    except Exception:
+        return []
 
-    st.markdown("### 🚚 Daftar Pengiriman Barang Terbaru")
-    st.dataframe(shipment_data, use_container_width=True, hide_index=True)
+def create_po_header(po_id: str, pr_id: str, vendor_id: str):
+    sql = "INSERT INTO procwh.t_po_header (po_id, pr_id, vendor_id, status, created_at, updated_at) VALUES (%s,%s,%s,%s,NOW(),NOW())"
+    run_exec(sql, (po_id, pr_id, vendor_id, "DRAFT"))
+
+def insert_po_detail(po_id: str, pr_detail_id: int, item_id: str, qty:int, uom:str, unit_price:float):
+    sql = "INSERT INTO procwh.t_po_detail (po_id, pr_detail_id, item_id, qty_ordered, uom_id, unit_price, created_at, updated_at) VALUES (%s,%s,%s,%s,%s,%s,NOW(),NOW())"
+    run_exec(sql, (po_id, pr_detail_id, item_id, qty, uom, unit_price))
 
 
-# ===============================================
-# ========== HALAMAN INVENTORI AKTIF (NEW) ==========
-# ===============================================
-elif st.session_state.active_page == "Inventori":
-    st.title("📦 Inventori Aktif (Saldo Stok Saat Ini)")
-    st.write("Ringkasan saldo stok per jenis barang di gudang utama.")
-    
-    inventory_df = calculate_inventory_balance()
-    
-    if not inventory_df.empty:
-        st.markdown(f"**Total Item Unik:** {len(inventory_df)}")
-        
-        st.dataframe(
-            inventory_df.style.format({
-                'Qty Aktif': "{:,.0f}"
-            }),
-            use_container_width=True, 
-            hide_index=True,
-            column_config={
-                "Qty Aktif": st.column_config.NumberColumn("Qty Aktif", help="Saldo stok saat ini", format="%i"),
-            }
-        )
-        
-        st.markdown("---")
-        st.info("Saldo ini dihitung dari akumulasi semua transaksi **Stok Masuk** dikurangi **Stok Keluar** yang tercatat.")
+def generate_po_id_stub():
+    # lightweight generator for UI demo; replace with procwh.fn_next_po_id()
+    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    return f"PO-UI-{ts}"
+
+
+def generate_gr_id_stub():
+    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    return f"GR-UI-{ts}"
+
+
+def create_gr_from_po_ui(po_row: Dict[str, Any]) -> str:
+    """
+    UI-level function to demonstrate: when user triggers GR for a PO,
+    create GR header + details and auto-generate stock movement records in session_state.
+    This function does not write to DB unless you hook run_exec calls.
+    """
+    po_id = po_row.get("po_id")
+    # For demo: fetch PO detail rows from DB (if available), else create sample
+    try:
+        po_details = run_query("SELECT po_detail_id, item_id, qty_ordered FROM procwh.t_po_detail WHERE po_id = %s", (po_id,))
+    except Exception:
+        po_details = [(1, "ITM0001", 3), (2, "ITM0016", 1)]
+
+    gr_id = generate_gr_id_stub()
+    created = datetime.now()
+    # Insert GR header to DB (commented; implement if needed)
+    # run_exec("INSERT INTO procwh.t_gr_header (gr_id, po_id, gr_date, created_at) VALUES (%s,%s,%s,NOW())", (gr_id, po_id, created))
+
+    # For each po_detail, create gr_detail and stock movement entry in session_state
+    for pd in po_details:
+        po_detail_id, item_id, qty_ordered = pd[0], pd[1], pd[2]
+        qty_received = qty_ordered  # assume full receive in demo
+        # In DB: insert gr_detail
+        # run_exec("INSERT INTO procwh.t_gr_detail (gr_id, po_detail_id, item_id, qty_received, qty_remaining, created_at, updated_at) VALUES (%s,%s,%s,%s,%s,NOW(),NOW())", (gr_id, po_detail_id, item_id, qty_received, 0))
+
+        # create stock movement entry (UI-only)
+        st.session_state.stock_history_ui.append({
+            "movement_id": f"SM-{len(st.session_state.stock_history_ui)+1}",
+            "gr_id": gr_id,
+            "po_id": po_id,
+            "item_id": item_id,
+            "qty": qty_received,
+            "movement_type": "IN",
+            "location_id": "MAIN-WAREHOUSE",
+            "timestamp": created
+        })
+
+    return gr_id
+
+
+# ---------------------------
+# Sidebar navigation
+# ---------------------------
+menu = ["Dashboard", "PR Approval", "PO Approval", "GR / Receiving", "Inventory (m_stock)", "Stock Movement", "Settings"]
+choice = st.sidebar.selectbox("Menu", menu, index=menu.index(st.session_state.active_page) if st.session_state.active_page in menu else 0)
+st.session_state.active_page = choice
+
+# ---------------------------
+# Dashboard
+# ---------------------------
+if choice == "Dashboard":
+    st.title("📊 Dashboard - Sistem Logistik")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Approved PR", len(fetch_approved_prs()))
+    col2.metric("Draft PO", len(run_query("SELECT 1 FROM procwh.t_po_header WHERE status='DRAFT'") or []))
+    col3.metric("Stock Movements (UI)", len(st.session_state.stock_history_ui))
+
+    # quick charts
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=["PR","PO","GR"], y=[len(fetch_approved_prs()), 5, len(st.session_state.stock_history_ui)]))
+    st.plotly_chart(fig, use_container_width=True)
+
+# ---------------------------
+# PR Approval UI
+# ---------------------------
+elif choice == "PR Approval":
+    st.title("📝 PR Approval")
+    st.markdown("List PR yang membutuhkan approval or already approved. (UI - connect DB later)")
+
+    prs = fetch_approved_prs()  # approved
+    if not prs:
+        st.info("No approved PRs available to process.")
     else:
-        st.warning("Inventori saat ini kosong. Silakan input transaksi Stok Masuk terlebih dahulu.")
+        # show PR list
+        pr_df = pd.DataFrame(prs, columns=["pr_id","employee_id","pr_date","status","remarks","created_at","updated_at"])
+        st.dataframe(pr_df, use_container_width=True)
 
-
-# ===============================================
-# ========== HALAMAN STOK MASUK (UPDATED) ==========
-# ===============================================
-elif st.session_state.active_page == "Stok Masuk":
-    st.title("⬆️ Input Stok Masuk")
-    
-    with st.form("form_masuk"):
-        col_in_1, col_in_2 = st.columns(2)
-        with col_in_1:
-            jenis = st.text_input("Jenis Barang*")
-            jumlah = st.number_input("Jumlah (Qty)*", min_value=1, value=1)
-            uom = st.text_input("Satuan (UOM)*", value="unit")
-        with col_in_2:
-            tanggal = st.date_input("Tanggal Transaksi*", value=date.today())
-            supplier_in = st.selectbox("Supplier/Sumber", options=["(Pilih Supplier)"] + st.session_state.master_suppliers)
-        
-        submitted = st.form_submit_button("Simpan Stok Masuk")
-        
-    if submitted:
-        if jenis and jumlah > 0 and uom and supplier_in != "(Pilih Supplier)":
-            st.session_state.stock_history.append({
-                "Jenis Barang": jenis, 
-                "Qty": jumlah, # Qty positif untuk Masuk
-                "UOM": uom,
-                "Type": "Masuk", 
-                "Date": tanggal,
-                "Supplier/Pond": supplier_in
-            })
-            st.success(f"✅ Data stok masuk **'{jenis}'** sejumlah **{jumlah} {uom}** berhasil disimpan!")
-            st.rerun()
+        # Choose PR to view details
+        selected = st.selectbox("Pilih PR", pr_df["pr_id"].tolist())
+        details = fetch_pr_details(selected)
+        if details:
+            det_df = pd.DataFrame(details, columns=["pr_detail_id","pr_id","item_id","description","qty_request","uom_id","unit_price","total_amount","vendor_id"])
+            st.dataframe(det_df, use_container_width=True)
         else:
-            st.error("⚠️ Mohon lengkapi semua kolom yang wajib diisi, termasuk Jenis Barang, Jumlah, Satuan, dan Supplier.")
+            st.info("No PR details found.")
+
+        st.markdown("---")
+        st.header("Simulate Approval (UI)")
+        col1, col2 = st.columns(2)
+        with col1:
+            level = st.selectbox("Pilih level approval", [1,2])
+            action_by = st.text_input("Action By (user id)", value="user_demo")
+        with col2:
+            action = st.selectbox("Action", ["APPROVE", "REJECT"])
+            notes = st.text_area("Notes (optional)")
+
+        if st.button("Submit PR Approval"):
+            # In real: insert into t_pr_approval and let trigger update t_pr_header
+            # UI: show message
+            st.success(f"PR {selected} -> {action} by {action_by} (level {level}) recorded (UI-only).")
+            # Optionally run insert query:
+            # run_exec("INSERT INTO procwh.t_pr_approval (pr_id, action, action_by, action_at, notes, level) VALUES (%s,%s,%s,NOW(),%s,%s)", (selected, action, action_by, notes, level))
+
+
+# ---------------------------
+# PO Approval UI
+# ---------------------------
+elif choice == "PO Approval":
+    st.title("📄 PO Approval (3-level)")
+    st.markdown("List draft PO and perform approval steps (UI demonstration).")
+
+    # fetch draft PO's (UI / DB)
+    try:
+        po_list = run_query("SELECT po_id, vendor_id, status FROM procwh.t_po_header WHERE status = 'DRAFT'")
+    except Exception:
+        po_list = [("PO-UI-1","946b489e-52b2-4d79-9404-152ffa316e0b","DRAFT")]
+
+    if not po_list:
+        st.info("No DRAFT POs available.")
+    else:
+        po_df = pd.DataFrame(po_list, columns=["po_id","vendor_id","status"])
+        st.dataframe(po_df, use_container_width=True)
+
+        selected_po = st.selectbox("Pilih PO untuk approve", po_df["po_id"].tolist())
+        st.markdown("### PO Details (preview)")
+        try:
+            po_details = run_query("SELECT po_detail_id, item_id, qty_ordered, uom_id, unit_price FROM procwh.t_po_detail WHERE po_id = %s", (selected_po,))
+        except Exception:
+            po_details = [(1,"ITM0001",3,"UNIT",1500000)]
+        st.dataframe(pd.DataFrame(po_details, columns=["po_detail_id","item_id","qty_ordered","uom_id","unit_price"]), use_container_width=True)
+
+        st.markdown("---")
+        st.header("Simulate PO Approval")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            level = st.selectbox("Approval Level", [1,2,3])
+            action_by = st.text_input("Action by", value="po_user")
+        with col2:
+            action = st.selectbox("Action", ["APPROVE","REJECT"])
+            notes = st.text_input("Notes")
+        with col3:
+            if st.button("Submit PO Approval"):
+                # Suggested behaviour:
+                # - insert into t_po_approval
+                # - trigger updates t_po_header.status based on level rules (REVIEWED -> VERIFIED -> APPROVED)
+                st.success(f"PO {selected_po} {action} at level {level} by {action_by} (UI-only).")
+                # Optionally: run_exec insert query
+
+# ---------------------------
+# GR / Receiving UI
+# ---------------------------
+elif choice == "GR / Receiving":
+    st.title("📥 Goods Receipt (GR) & Receiving")
+    st.markdown("Generate GR from PO and auto-create stock movement (UI-only).")
+
+    # list POs that are APPROVED (or VERIFIED depending on your flow)
+    try:
+        approved_pos = run_query("SELECT po_id, vendor_id, status FROM procwh.t_po_header WHERE status IN ('APPROVED','VERIFIED','REVIEWED')")
+    except Exception:
+        # demo: list some POs created previously
+        approved_pos = [("PO-UI-1", "946b489e-52b2-4d79-9404-152ffa316e0b", "APPROVED"),
+                        ("PO-UI-2", "f294946b-6c53-410b-b534-90ec756bd217", "APPROVED")]
+
+    if not approved_pos:
+        st.info("No approved POs to receive.")
+    else:
+        ap_df = pd.DataFrame(approved_pos, columns=["po_id","vendor_id","status"])
+        st.dataframe(ap_df, use_container_width=True)
+        chosen = st.selectbox("Pilih PO untuk GR", ap_df["po_id"].tolist())
+        if st.button("Generate GR & Create Stock Movement"):
+            # call ui generate
+            po_row = {"po_id": chosen}
+            gr_id = create_gr_from_po_ui(po_row)
+            st.success(f"GR {gr_id} created (UI-only). Stock movements appended to UI list.")
 
     st.markdown("---")
-    st.subheader("History Stok Masuk Terbaru")
-    
-    in_history_df = pd.DataFrame([item for item in st.session_state.stock_history if item["Type"] == "Masuk"])
-    
-    if not in_history_df.empty:
-        # Tampilkan hanya kolom yang relevan
-        display_df = in_history_df.sort_values(by="Date", ascending=False).reset_index(drop=True)
-        display_df = display_df.rename(columns={"Jenis Barang": "Barang", "Qty": "Jumlah", "UOM": "Satuan", "Date": "Tanggal"})
-        
-        st.dataframe(
-            display_df[['Tanggal', 'Barang', 'Jumlah', 'Satuan', 'Supplier/Pond']], 
-            use_container_width=True, 
-            hide_index=True,
-            column_config={
-                "Jumlah": st.column_config.NumberColumn("Jumlah", format="%i"),
-                "Tanggal": st.column_config.DateColumn("Tanggal", format="YYYY/MM/DD")
-            }
-        )
+    st.subheader("Stock Movements (preview - UI)")
+    sm_df = pd.DataFrame(st.session_state.stock_history_ui)
+    if sm_df.empty:
+        st.info("No stock movement yet.")
     else:
-        st.info("Belum ada riwayat Stok Masuk.")
+        st.dataframe(sm_df, use_container_width=True)
 
 
-# ===============================================
-# ========== HALAMAN STOK KELUAR (UPDATED) ==========
-# ===============================================
-elif st.session_state.active_page == "Stok Keluar":
-    st.title("⬇️ Input Stok Keluar")
-    
-    inventory_df = calculate_inventory_balance()
-    item_options = ["(Pilih Barang)"] + inventory_df['Jenis Barang'].tolist()
-    
-    with st.form("form_keluar"):
-        col_out_1, col_out_2 = st.columns(2)
-        with col_out_1:
-            jenis = st.selectbox("Jenis Barang*", options=item_options, key="keluar_jenis")
-            
-            # Mendapatkan UOM dan stok max
-            uom_value = ""
-            max_qty = 0
-            if jenis != "(Pilih Barang)":
-                current_stock = inventory_df[inventory_df['Jenis Barang'] == jenis].iloc[0]
-                max_qty = current_stock['Qty Aktif']
-                uom_value = current_stock['Satuan']
-                st.info(f"Stok Tersedia: **{max_qty:,.0f} {uom_value}**")
-            
-            jumlah = st.number_input(f"Jumlah (Qty)* ({uom_value})", min_value=1, max_value=max_qty if max_qty > 0 else 100000, value=1, key="keluar_jumlah")
-        
-        with col_out_2:
-            tanggal = st.date_input("Tanggal Transaksi*", value=date.today())
-            lokasi = st.selectbox("Lokasi Tujuan/Kolam", options=["(Pilih Lokasi)", "Kolam A1", "Kolam A2", "Kolam B1", "Gudang Cabang"])
-            
-        submitted = st.form_submit_button("Simpan Stok Keluar")
-        
-    if submitted:
-        if jenis != "(Pilih Barang)" and jumlah > 0 and lokasi != "(Pilih Lokasi)":
-            if jumlah > max_qty:
-                st.error("⚠️ Gagal: Jumlah stok keluar melebihi saldo yang tersedia. Harap periksa kembali.")
-            else:
-                st.session_state.stock_history.append({
-                    "Jenis Barang": jenis, 
-                    "Qty": -jumlah, # Qty negatif untuk Keluar
-                    "UOM": uom_value,
-                    "Type": "Keluar", 
-                    "Date": tanggal,
-                    "Supplier/Pond": lokasi # Menggunakan kolom yang sama untuk tujuan
-                })
-                st.success(f"✅ Data stok keluar **'{jenis}'** sejumlah **{jumlah} {uom_value}** berhasil disimpan untuk **{lokasi}**!")
-                st.rerun()
+# ---------------------------
+# Inventory (m_stock) UI
+# ---------------------------
+elif choice == "Inventory (m_stock)":
+    st.title("📦 Inventory (m_stock) - Real Time view (UI)")
+    st.markdown("This page reads from your `m_stock` master if connected, otherwise shows a UI-aggregated balance from stock movements.")
+
+    # Try to read m_stock table
+    try:
+        mstock_rows = run_query("SELECT item_id, location_id, current_qty, last_updated FROM procwh.m_stock")
+    except Exception:
+        mstock_rows = []
+
+    if mstock_rows:
+        df = pd.DataFrame(mstock_rows, columns=["item_id","location_id","current_qty","last_updated"])
+        st.dataframe(df, use_container_width=True)
+    else:
+        # derive from UI stock movements
+        balance = defaultdict(lambda: defaultdict(float))
+        for mv in st.session_state.stock_history_ui:
+            item = mv["item_id"]
+            loc = mv.get("location_id","MAIN-WAREHOUSE")
+            qty = mv["qty"]
+            balance[item][loc] += qty
+
+        rows = []
+        for item, locs in balance.items():
+            for loc, qty in locs.items():
+                rows.append({"item_id":item, "location_id":loc, "current_qty":qty, "last_updated": datetime.now()})
+        df = pd.DataFrame(rows)
+        if df.empty:
+            st.info("No stock data available (m_stock empty and no UI movements).")
         else:
-            st.error("⚠️ Mohon lengkapi semua kolom yang wajib diisi, termasuk Jenis Barang dan Lokasi Tujuan.")
+            st.dataframe(df, use_container_width=True)
+
+
+# ---------------------------
+# Stock Movement (read-only)
+# ---------------------------
+elif choice == "Stock Movement":
+    st.title("📑 Stock Movement (Read-only)")
+    st.markdown("Read-only list of stock movements (from t_stock_movement).")
+
+    # Try real table read
+    try:
+        sm_rows = run_query("SELECT movement_id, gr_id, po_id, item_id, qty, movement_type, location_id, created_at FROM procwh.t_stock_movement ORDER BY created_at DESC LIMIT 200")
+    except Exception:
+        sm_rows = []  # fallback to UI session list
+
+    if not sm_rows:
+        if st.session_state.stock_history_ui:
+            st.dataframe(pd.DataFrame(st.session_state.stock_history_ui), use_container_width=True)
+        else:
+            st.info("No stock movement data available.")
+    else:
+        st.dataframe(pd.DataFrame(sm_rows, columns=["movement_id","gr_id","po_id","item_id","qty","movement_type","location_id","created_at"]), use_container_width=True)
+
+
+# ---------------------------
+# Settings (master data quick)
+# ---------------------------
+elif choice == "Settings":
+    st.title("⚙️ Settings (Master Data quick edits)")
+    st.markdown("Add/edit master suppliers or categories (UI-only).")
+    vendors = [v[1] for v in fetch_master_vendors()]
+    if not vendors:
+        vendors = st.session_state.get("master_suppliers", ["PT Pakan Jaya", "CV Kimia Air"])
+    st.write("Suppliers")
+    v_df = pd.DataFrame({"name": vendors})
+    st.dataframe(v_df, use_container_width=True)
+    with st.form("add_supplier"):
+        newv = st.text_input("New supplier name")
+        if st.form_submit_button("Add supplier"):
+            st.session_state.master_suppliers.append(newv)
+            st.success(f"Supplier '{newv}' added (UI-only).")
 
     st.markdown("---")
-    st.subheader("History Stok Keluar Terbaru")
-    
-    out_history_df = pd.DataFrame([item for item in st.session_state.stock_history if item["Type"] == "Keluar"])
-    
-    if not out_history_df.empty:
-        # Tampilkan hanya kolom yang relevan dan ubah Qty menjadi positif untuk tampilan
-        display_df = out_history_df.sort_values(by="Date", ascending=False).reset_index(drop=True)
-        display_df['Qty Keluar'] = display_df['Qty'].abs()
-        display_df = display_df.rename(columns={"Jenis Barang": "Barang", "UOM": "Satuan", "Date": "Tanggal", "Supplier/Pond": "Lokasi Tujuan"})
-        
-        st.dataframe(
-            display_df[['Tanggal', 'Barang', 'Qty Keluar', 'Satuan', 'Lokasi Tujuan']], 
-            use_container_width=True, 
-            hide_index=True,
-            column_config={
-                "Qty Keluar": st.column_config.NumberColumn("Jumlah", format="%i"),
-                "Tanggal": st.column_config.DateColumn("Tanggal", format="YYYY/MM/DD")
-            }
-        )
+    st.write("Master items (preview)")
+    items = fetch_master_items()
+    if items:
+        st.dataframe(pd.DataFrame(items, columns=["item_id","name","uom"]), use_container_width=True)
     else:
-        st.info("Belum ada riwayat Stok Keluar.")
+        st.info("No items fetched (DB offline).")
 
-
-# ===============================================
-# ========== HALAMAN PR (SAFE DB UPDATED) ======
-# ===============================================
-elif st.session_state.active_page == "Purchase Request":
-    st.title("📝 Input Purchase Request")
-    st.write("Silakan input setiap item barang satu per satu.")
-
-    # ---------------------------
-    # 0️⃣ Ambil Master Data dari DB
-    # ---------------------------
-    master_items = {row[1]: row[0] for row in run_query("SELECT item_id, name FROM procwh.m_item")}
-    master_vendors = {row[1]: row[0] for row in run_query("SELECT vendor_id, name FROM procwh.m_vendor")}
-    master_employees = {row[1]: row[0] for row in run_query("SELECT employee_id, name FROM procwh.m_employee")}
-
-    st.session_state.master_vendors = list(master_vendors.keys()) 
-    st.session_state.master_items = list(master_items.keys())
-    st.session_state.master_employees = list(master_employees.keys())
-
-    # ---------------------------
-    # 1️⃣ Form Input Item PR
-    # ---------------------------
-    with st.expander("➕ Tambah Item Baru", expanded=True):
-        with st.form("form_add_item", clear_on_submit=True):
-            col0, col1, col2, col3, col4 = st.columns([2, 3, 1.5, 1, 2.5])
-            with col0:
-                pr_number_item = st.text_input("Nomor PR (Per Item)*", key="item_pr_number")
-            with col1:
-                description = st.selectbox("Deskripsi Barang/Jasa*", options=["(Pilih Item)"] + list(master_items.keys()))
-            with col2:
-                qty = st.number_input("Qty*", min_value=1, value=1, key="item_qty")
-            with col3:
-                uom = st.text_input("UOM*", value="unit", key="item_uom")
-            with col4:
-                unit_price = st.number_input("Harga Satuan (Rp)*", min_value=0, format="%i", key="item_price")
-            
-            col_vendor, col2 = st.columns(2)
-            with col_vendor:
-                vendor = st.selectbox("Vendor*", options=["(Pilih Vendor)"] + list(master_vendors.keys()))
-
-            total_price = qty * unit_price
-            st.info(f"Total Harga Estimasi: Rp {total_price:,.0f}")
-
-            submitted_item = st.form_submit_button("Tambahkan ke Daftar PR")
-
-        if submitted_item:
-            if description != "(Pilih Item)" and vendor != "(Pilih Vendor)" and total_price > 0 and pr_number_item:
-                st.session_state.pr_items.append({
-                    "PR Number": pr_number_item,
-                    "Description": description,
-                    "Qty": qty,
-                    "UOM": uom,
-                    "Unit Price (Est)": unit_price,
-                    "Total Price (Est)": total_price,
-                    "Vendor Recomendation": vendor
-                })
-                st.success(f"✅ Item '{description}' ditambahkan ke PR No. {pr_number_item}")
-                st.rerun()
-            else:
-                st.error("Lengkapi semua kolom bertanda *.")
-
-    # ---------------------------
-    # 2️⃣ Daftar Item PR
-    # ---------------------------
-    st.markdown("### Daftar Item PR Siap Proses")
-    if st.session_state.pr_items:
-        total_all = sum(item["Total Price (Est)"] for item in st.session_state.pr_items)
-        pr_numbers_list = list(set(item["PR Number"] for item in st.session_state.pr_items))
-        if len(pr_numbers_list) > 1:
-            st.warning(f"⚠️ Ditemukan beberapa Nomor PR: {', '.join(pr_numbers_list)}")
-        else:
-            st.info(f"Semua item akan dikonsolidasikan dalam PR No: {pr_numbers_list[0]}")
-
-        for i, item in enumerate(st.session_state.pr_items):
-            col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns([1,4,1,1,2,2,3,2,1])
-            with col1: st.write(i+1)
-            with col2: st.markdown(f"**{item['Description']}**\nPR No: `{item['PR Number']}`")
-            with col3: st.write(item["Qty"])
-            with col4: st.write(item["UOM"])
-            with col5: st.write(f"Rp {item['Unit Price (Est)']:,.0f}")
-            with col6: st.write(f"Rp {item['Total Price (Est)']:,.0f}")
-            with col7: st.write(item["Vendor Recomendation"])
-            with col9: st.button("❌", key=f"del_{i}", on_click=delete_pr_item, args=(i,))
-
-        st.subheader(f"💰 Grand Total Estimasi: Rp {total_all:,.0f}")
-        st.markdown("---")
-
-        # ---------------------------
-        # 3️⃣ Form Submit PR Header ke DB
-        # ---------------------------
-        st.markdown("### Konfirmasi & Submit PR")
-        with st.form("form_submit_pr"):
-            colh1, colh2 = st.columns(2)
-            with colh1:
-                pr_number_final = st.text_input("Nomor PR Final*", value=pr_numbers_list[0] if len(pr_numbers_list)==1 else "")
-                employee_name = st.selectbox("Prepared By*", options=["(Pilih Employee)"] + st.session_state.master_employees)
-            with colh2:
-                reason = st.text_area("Alasan / Tujuan Pembelian*")
-
-            submitted_pr = st.form_submit_button("✅ Submit PR")
-
-            if submitted_pr:
-                if pr_number_final != "" and employee_name != "(Pilih Employee)" and reason != "":
-                    failed_items = []
-
-                    employee_id = master_employees.get(employee_name)
-
-                    # --- Insert header
-                    run_query("""
-                        INSERT INTO procwh.t_pr_header (pr_id, employee_id, pr_date, remarks)
-                        VALUES (%s, %s, CURRENT_DATE, %s)
-                        ON CONFLICT (pr_id) DO NOTHING
-                    """, (pr_number_final, employee_id, reason), fetch=False)
-
-                    # --- Insert detail (sesuai tabel terbaru, tanpa expected_date)
-                    for item in st.session_state.pr_items:
-                        item_id = master_items.get(item["Description"])
-                        vendor_id = master_vendors.get(item["Vendor Recomendation"])
-                        if item_id is None or vendor_id is None:
-                            failed_items.append(item["Description"])
-                            continue
-
-                        run_query("""
-                            INSERT INTO procwh.t_pr_detail
-                            (pr_id, item_id, description, qty_request, uom_id, unit_price, total_amour, vendor_id)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                        """, (
-                            pr_number_final, item_id, item["Description"], item["Qty"], item["UOM"],
-                            item["Unit Price (Est)"], item["Total Price (Est)"], vendor_id
-                        ), fetch=False)
-
-                    if failed_items:
-                        st.warning(f"⚠️ Item gagal submit (tidak ada master data): {', '.join(failed_items)}")
-
-                    st.success(f"🎉 PR {pr_number_final} berhasil diajukan dengan {len(st.session_state.pr_items) - len(failed_items)} item.")
-                    st.balloons()
-                    st.session_state.pr_items = []
-                    st.rerun()
-                else:
-                    st.error("Lengkapi semua data header PR.")
-
-
-# ===============================================
-# ========== HALAMAN PURCHASE ORDER (MODIFIED) ==========
-# ===============================================
-elif st.session_state.active_page == "Purchase Order":
-    st.title("📄 Pembuatan Purchase Order")
-    st.subheader("Daftar Item Purchase Request yang Siap Dibuatkan PO")
-
-    st.info("💡 Data di bawah adalah Purchase Request yang statusnya sudah **Approved** dan siap diproses menjadi Purchase Order. Anda bisa menyesuaikan Harga Final di kolom **Harga Final (Rp)**.")
-    
-    # 1. Buat salinan data dan tambahkan kolom 'select' secara eksplisit
-    po_df = approved_pr_data.copy()
-    if 'select' not in po_df.columns:
-        po_df.insert(0, 'select', False)
-        
-    st.markdown("### Item PR Approved")
-    
-    # 2. Gunakan st.data_editor pada DataFrame yang sudah memiliki kolom 'select'
-    edited_df = st.data_editor(
-        po_df,
-        column_config={
-            "select": st.column_config.CheckboxColumn(
-                "Pilih",
-                help="Pilih item yang akan dibuatkan Purchase Order",
-                default=False,
-            ),
-            "Total Final": st.column_config.NumberColumn(
-                "Total Final (Rp)",
-                format="Rp %,.0f",
-                disabled=True
-            ),
-            # Kolom Unit Price (Final) dibuat editable agar bisa negosiasi harga
-            "Unit Price (Final)": st.column_config.NumberColumn(
-                "Harga Final (Rp)",
-                format="Rp %,.0f",
-                min_value=0,
-                step=1000
-            ),
-            "Tgl Target Terima": st.column_config.DateColumn(
-                "Tgl Target Terima",
-                format="YYYY/MM/DD",
-            )
-        },
-        # Kolom selain select dan harga final di-disable
-        disabled=("PR No.", "Deskripsi Barang", "Qty", "UOM", "Supplier Rekomendasi", "Tgl Target Terima", "Total Final"),
-        use_container_width=True,
-        key="po_data_editor",
-        hide_index=True
-    )
-
-    # 3. Filter DataFrame yang sudah diedit.
-    selected_items = edited_df[edited_df['select']].copy() 
-    
-    # 4. Recalculate Total Final based on edited Unit Price (Final)
-    if not selected_items.empty:
-        # Recalculate the total in the selected dataframe based on the user's input/edit
-        selected_items['Total Final'] = selected_items['Qty'] * selected_items['Unit Price (Final)']
-        
-        # Calculate Grand Total PO
-        grand_total_po = selected_items['Total Final'].sum()
-
-    st.markdown("---")
-
-    if not selected_items.empty:
-        
-        pr_numbers = selected_items['PR No.'].unique()
-        suppliers = selected_items['Supplier Rekomendasi'].unique()
-
-        # Display Grand Total Card
-        st.markdown(f"""
-        <div class='grand-total-card'>
-            <div class='grand-total-label'>GRAND TOTAL NILAI PO</div>
-            <div class='grand-total-value'>Rp {grand_total_po:,.0f}</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        
-        if len(suppliers) > 1:
-            st.error("⚠️ Item yang dipilih memiliki lebih dari satu supplier. Harap pilih item dari satu supplier saja untuk membuat satu PO.")
-        
-        else:
-            st.subheader(f"Form Purchase Order ({len(selected_items)} Item Terpilih)")
-            
-            with st.form("form_purchase_order"):
-                col_po_1, col_po_2 = st.columns(2)
-                
-                with col_po_1:
-                    po_number = st.text_input("Nomor PO", value=f"PO-INA/{pd.Timestamp.today().strftime('%Y%m%d')}-001", disabled=True)
-                    po_supplier = st.text_input("Supplier PO", value=suppliers[0] if suppliers.size > 0 else "N/A", disabled=True)
-                    po_date = st.date_input("Tanggal PO", value=date.today(), disabled=True)
-                
-                with col_po_2:
-                    st.text_input("Termin Pembayaran", value="30 Hari Setelah Invoice")
-                    st.text_input("Alamat Pengiriman", value="Tambak Situbondo")
-                    st.text_input("PIC Penerima Barang", value="Bayu Logistik")
-                
-                st.markdown("---")
-                st.markdown("#### Item yang Dipesan")
-                
-                # Menampilkan kembali item yang dipilih dengan harga final yang sudah di-recalculate
-                final_df_display = selected_items[['PR No.', 'Deskripsi Barang', 'Qty', 'UOM', 'Unit Price (Final)', 'Total Final']]
-                final_df_display = final_df_display.rename(columns={
-                    'Unit Price (Final)': 'Harga Satuan Final',
-                    'Total Final': 'Total Harga'
-                })
-                
-                st.dataframe(
-                    final_df_display.style.format({
-                        'Harga Satuan Final': "Rp {:,.0f}", 
-                        'Total Harga': "Rp {:,.0f}",
-                        'Qty': "{:,.0f}"}),
-                    use_container_width=True,
-                    hide_index=True
-                )
-                
-                st.markdown("---")
-                submitted = st.form_submit_button("🎉 Generate & Submit Purchase Order")
-                
-                if submitted:
-                    st.success(f"🎉 Purchase Order **{po_number}** senilai **Rp {grand_total_po:,.0f}** untuk supplier **{po_supplier}** berhasil dibuat!")
-                    st.balloons()
-    else:
-        st.warning("Silakan pilih minimal satu item PR yang sudah di-approve di tabel di atas untuk membuat Purchase Order baru.")
-
-
-# ===============================================
-# ========== HALAMAN SETTING (UPDATED) ==========
-# ===============================================
-elif st.session_state.active_page == "Setting":
-    st.title("⚙️ Pengaturan Sistem: Master Data")
-    st.write("Kelola daftar Supplier dan Kategori Barang yang digunakan dalam sistem.")
-
-    # --- TABBED INTERFACE ---
-    tab_supplier, tab_category = st.tabs(["Master Supplier", "Master Kategori"])
-
-    # 1. Master Supplier
-    with tab_supplier:
-        st.subheader("Daftar Supplier Aktif")
-        
-        # Tampilkan daftar
-        supplier_df = pd.DataFrame({"Nama Supplier": st.session_state.master_suppliers})
-        st.dataframe(supplier_df, use_container_width=True, hide_index=True)
-        
-        st.markdown("---")
-        
-        # Form Tambah Supplier
-        with st.form("form_add_supplier", clear_on_submit=True):
-            new_supplier = st.text_input("Nama Supplier Baru")
-            col_sup_add, col_sup_empty = st.columns([1, 4])
-            with col_sup_add:
-                submit_supplier = st.form_submit_button("➕ Tambah Supplier")
-            
-            if submit_supplier:
-                if new_supplier and new_supplier not in st.session_state.master_suppliers:
-                    st.session_state.master_suppliers.append(new_supplier)
-                    st.success(f"Supplier **'{new_supplier}'** berhasil ditambahkan.")
-                    st.rerun()
-                elif new_supplier in st.session_state.master_suppliers:
-                    st.warning(f"Supplier **'{new_supplier}'** sudah ada dalam daftar.")
-                else:
-                    st.error("Nama supplier tidak boleh kosong.")
-
-    # 2. Master Kategori
-    with tab_category:
-        st.subheader("Daftar Kategori Barang Aktif")
-        
-        # Tampilkan daftar
-        category_df = pd.DataFrame({"Nama Kategori": st.session_state.master_categories})
-        st.dataframe(category_df, use_container_width=True, hide_index=True)
-        
-        st.markdown("---")
-        
-        # Form Tambah Kategori
-        with st.form("form_add_category", clear_on_submit=True):
-            new_category = st.text_input("Nama Kategori Baru")
-            col_cat_add, col_cat_empty = st.columns([1, 4])
-            with col_cat_add:
-                submit_category = st.form_submit_button("➕ Tambah Kategori")
-            
-            if submit_category:
-                if new_category and new_category not in st.session_state.master_categories:
-                    st.session_state.master_categories.append(new_category)
-                    st.success(f"Kategori **'{new_category}'** berhasil ditambahkan.")
-                    st.rerun()
-                elif new_category in st.session_state.master_categories:
-                    st.warning(f"Kategori **'{new_category}'** sudah ada dalam daftar.")
-                else:
-                    st.error("Nama kategori tidak boleh kosong.")
+# End of file
