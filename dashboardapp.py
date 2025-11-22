@@ -261,10 +261,10 @@ def ui_pr_approval():
         notes = st.text_input("Notes")
 
         if st.button("Submit Approval PR"):
-            run_query("""
+            run_exec("""
                 INSERT INTO procwh.t_pr_approval (pr_id, level, action, action_at, notes)
                 VALUES (%s, %s, %s, NOW(), %s)
-            """, (selected, next_level, action, notes), fetch=False)
+            """, (selected, next_level, action, notes))
             st.success(f"PR {selected} berhasil {action}")
             st.rerun()
 
@@ -300,10 +300,11 @@ def ui_po_approval():
         notes = st.text_area("Notes")
 
         if st.button("Submit Approval PO"):
-            run_query("""
+            run_exec("""
                 INSERT INTO procwh.t_po_approval (po_id, level, action, action_at, notes)
                 VALUES (%s, %s, %s, NOW(), %s)
-            """, (selected, next_level, action, notes), fetch=False)
+            """, (selected, next_level, action, notes))
+
 
             st.success(f"PO {selected} berhasil {action}")
             st.rerun()
@@ -339,7 +340,7 @@ def ui_gr():
             )
 
         if st.button("Generate GR"):
-            run_query("SELECT procwh.fn_generate_gr_from_po(%s)", (selected,))
+            run_exec("SELECT procwh.fn_generate_gr_from_po(%s)", (selected,))
             st.success(f"GR berhasil dibuat untuk PO {selected}")
             st.balloons()
             st.rerun()
@@ -641,7 +642,10 @@ elif st.session_state.active_page == "Purchase Request":
         with st.form("form_submit_pr"):
             colh1, colh2 = st.columns(2)
             with colh1:
-                pr_number_final = st.text_input("Nomor PR Final*", value=pr_numbers_list[0] if len(pr_numbers_list)==1 else "")
+                # Generate nomor PR otomatis dari database
+                generated_pr = run_query("SELECT procwh.fn_next_pr_id()")[0]['fn_next_pr_id']
+                st.text_input("Nomor PR", value=generated_pr, disabled=True)
+                pr_number_final = generated_pr
                 employee_name = st.selectbox("Prepared By*", options=["(Pilih Employee)"] + st.session_state.master_employees)
             with colh2:
                 reason = st.text_area("Alasan / Tujuan Pembelian*")
@@ -654,12 +658,10 @@ elif st.session_state.active_page == "Purchase Request":
 
                     employee_id = master_employees.get(employee_name)
 
-                    # --- Insert header
-                    run_query("""
+                    run_exec("""
                         INSERT INTO procwh.t_pr_header (pr_id, employee_id, pr_date, remarks)
                         VALUES (%s, %s, CURRENT_DATE, %s)
-                        ON CONFLICT (pr_id) DO NOTHING
-                    """, (pr_number_final, employee_id, reason), fetch=False)
+                    """, (pr_number_final, employee_id, reason))
 
                     # --- Insert detail (sesuai tabel terbaru, tanpa expected_date)
                     for item in st.session_state.pr_items:
@@ -669,14 +671,15 @@ elif st.session_state.active_page == "Purchase Request":
                             failed_items.append(item["Description"])
                             continue
 
-                        run_query("""
+                        run_exec("""
                             INSERT INTO procwh.t_pr_detail
                             (pr_id, item_id, description, qty_request, uom_id, unit_price, total_amour, vendor_id)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         """, (
                             pr_number_final, item_id, item["Description"], item["Qty"], item["UOM"],
                             item["Unit Price (Est)"], item["Total Price (Est)"], vendor_id
-                        ), fetch=False)
+                        ))
+
 
                     if failed_items:
                         st.warning(f"⚠️ Item gagal submit (tidak ada master data): {', '.join(failed_items)}")
