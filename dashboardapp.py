@@ -563,51 +563,93 @@ elif st.session_state.active_page == "Purchase Request":
     master_vendors = {row[1]: row[0] for row in run_query("SELECT vendor_id, name FROM procwh.m_vendor")}
     master_employees = {row[1]: row[0] for row in run_query("SELECT employee_id, name FROM procwh.m_employee")}
 
-    st.session_state.master_vendors = list(master_vendors.keys()) 
+    st.session_state.master_vendors = list(master_vendors.keys())
     st.session_state.master_items = list(master_items.keys())
     st.session_state.master_employees = list(master_employees.keys())
 
     # ---------------------------
-    # 1️⃣ Form Input Item PR
+    # Ensure session keys
+    # ---------------------------
+    if "current_pr" not in st.session_state:
+        st.session_state.current_pr = None
+    if "pr_items" not in st.session_state:
+        st.session_state.pr_items = []
+
+    # ---------------------------
+    # Button: Create new PR (generate PR id)
+    # ---------------------------
+    st.markdown("### 🔹 PR Header")
+    colp1, colp2 = st.columns([3,1])
+    with colp1:
+        st.write("Buat dokumen PR baru sebelum menambahkan item.")
+        if st.session_state.current_pr:
+            st.success(f"PR Aktif: **{st.session_state.current_pr}**")
+        else:
+            st.info("Belum ada PR aktif.")
+    with colp2:
+        if st.button("➕ Buat PR Baru"):
+            # ambil dari DB
+            res = run_query("SELECT procwh.fn_next_pr_id()")
+            # result handling: jika run_query kembali list of tuples
+            if res and len(res) > 0:
+                try:
+                    new_pr = res[0][0]
+                except Exception:
+                    # fallback for dict-like
+                    new_pr = list(res[0].values())[0]
+                st.session_state.current_pr = new_pr
+                st.success(f"Nomor PR berhasil dibuat: **{new_pr}**")
+                st.experimental_rerun()
+            else:
+                st.error("Gagal generate PR ID. Cek koneksi atau fungsi DB procwh.fn_next_pr_id().")
+
+    st.markdown("---")
+
+    # ---------------------------
+    # 1️⃣ Form Input Item PR (disabled if no PR header)
     # ---------------------------
     with st.expander("➕ Tambah Item Baru", expanded=True):
-        with st.form("form_add_item", clear_on_submit=True):
-            col0, col1, col2, col3, col4 = st.columns([2, 3, 1.5, 1, 2.5])
-            with col0:
-                pr_number_item = st.text_input("Nomor PR (Per Item)*", key="item_pr_number")
-            with col1:
-                description = st.selectbox("Deskripsi Barang/Jasa*", options=["(Pilih Item)"] + list(master_items.keys()))
-            with col2:
-                qty = st.number_input("Qty*", min_value=1, value=1, key="item_qty")
-            with col3:
-                uom = st.text_input("UOM*", value="unit", key="item_uom")
-            with col4:
-                unit_price = st.number_input("Harga Satuan (Rp)*", min_value=0, format="%i", key="item_price")
-            
-            col_vendor, col2 = st.columns(2)
-            with col_vendor:
-                vendor = st.selectbox("Vendor*", options=["(Pilih Vendor)"] + list(master_vendors.keys()))
+        if st.session_state.current_pr is None:
+            st.warning("⚠️ Buat PR baru terlebih dahulu (klik tombol 'Buat PR Baru').")
+        else:
+            with st.form("form_add_item", clear_on_submit=True):
+                col0, col1, col2, col3, col4 = st.columns([2, 3, 1.5, 1, 2.5])
+                with col0:
+                    # Nomor PR tidak bisa diedit
+                    st.text_input("Nomor PR (otomatis)", value=st.session_state.current_pr, disabled=True, key="ui_pr_number")
+                with col1:
+                    description = st.selectbox("Deskripsi Barang/Jasa*", options=["(Pilih Item)"] + list(master_items.keys()), key="ui_item_desc")
+                with col2:
+                    qty = st.number_input("Qty*", min_value=1, value=1, key="ui_item_qty")
+                with col3:
+                    uom = st.text_input("UOM*", value="unit", key="ui_item_uom")
+                with col4:
+                    unit_price = st.number_input("Harga Satuan (Rp)*", min_value=0, format="%i", key="ui_item_price")
 
-            total_price = qty * unit_price
-            st.info(f"Total Harga Estimasi: Rp {total_price:,.0f}")
+                col_vendor, col_dummy = st.columns(2)
+                with col_vendor:
+                    vendor = st.selectbox("Vendor*", options=["(Pilih Vendor)"] + list(master_vendors.keys()), key="ui_item_vendor")
 
-            submitted_item = st.form_submit_button("Tambahkan ke Daftar PR")
+                total_price = qty * unit_price
+                st.info(f"Total Harga Estimasi: Rp {total_price:,.0f}")
 
-        if submitted_item:
-            if description != "(Pilih Item)" and vendor != "(Pilih Vendor)" and total_price > 0 and pr_number_item:
-                st.session_state.pr_items.append({
-                    "PR Number": pr_number_item,
-                    "Description": description,
-                    "Qty": qty,
-                    "UOM": uom,
-                    "Unit Price (Est)": unit_price,
-                    "Total Price (Est)": total_price,
-                    "Vendor Recomendation": vendor
-                })
-                st.success(f"✅ Item '{description}' ditambahkan ke PR No. {pr_number_item}")
-                st.rerun()
-            else:
-                st.error("Lengkapi semua kolom bertanda *.")
+                submitted_item = st.form_submit_button("Tambahkan ke Daftar PR")
+
+            if submitted_item:
+                if description != "(Pilih Item)" and vendor != "(Pilih Vendor)" and total_price > 0:
+                    st.session_state.pr_items.append({
+                        "PR Number": st.session_state.current_pr,
+                        "Description": description,
+                        "Qty": qty,
+                        "UOM": uom,
+                        "Unit Price (Est)": unit_price,
+                        "Total Price (Est)": total_price,
+                        "Vendor Recomendation": vendor
+                    })
+                    st.success(f"✅ Item '{description}' ditambahkan ke PR No. {st.session_state.current_pr}")
+                    st.experimental_rerun()
+                else:
+                    st.error("Lengkapi semua kolom bertanda *.")
 
     # ---------------------------
     # 2️⃣ Daftar Item PR
@@ -630,7 +672,10 @@ elif st.session_state.active_page == "Purchase Request":
             with col5: st.write(f"Rp {item['Unit Price (Est)']:,.0f}")
             with col6: st.write(f"Rp {item['Total Price (Est)']:,.0f}")
             with col7: st.write(item["Vendor Recomendation"])
-            with col9: st.button("❌", key=f"del_{i}", on_click=delete_pr_item, args=(i,))
+            with col9:
+                if st.button("❌", key=f"del_{i}"):
+                    st.session_state.pr_items.pop(i)
+                    st.experimental_rerun()
 
         st.subheader(f"💰 Grand Total Estimasi: Rp {total_all:,.0f}")
         st.markdown("---")
@@ -642,28 +687,27 @@ elif st.session_state.active_page == "Purchase Request":
         with st.form("form_submit_pr"):
             colh1, colh2 = st.columns(2)
             with colh1:
-                # Generate nomor PR otomatis dari database
-                generated_pr = run_query("SELECT procwh.fn_next_pr_id()")[0]['fn_next_pr_id']
-                st.text_input("Nomor PR", value=generated_pr, disabled=True)
-                pr_number_final = generated_pr
-                employee_name = st.selectbox("Prepared By*", options=["(Pilih Employee)"] + st.session_state.master_employees)
+                # Display PR number (read-only)
+                st.text_input("Nomor PR", value=st.session_state.current_pr, disabled=True)
+                employee_name = st.selectbox("Prepared By*", options=["(Pilih Employee)"] + st.session_state.master_employees, key="ui_pr_employee")
+                pr_number_final = st.session_state.current_pr
             with colh2:
-                reason = st.text_area("Alasan / Tujuan Pembelian*")
+                reason = st.text_area("Alasan / Tujuan Pembelian*", key="ui_pr_reason")
 
             submitted_pr = st.form_submit_button("✅ Submit PR")
 
             if submitted_pr:
-                if pr_number_final != "" and employee_name != "(Pilih Employee)" and reason != "":
+                if pr_number_final and employee_name != "(Pilih Employee)" and reason.strip() != "":
                     failed_items = []
-
                     employee_id = master_employees.get(employee_name)
 
+                    # --- Insert header
                     run_exec("""
                         INSERT INTO procwh.t_pr_header (pr_id, employee_id, pr_date, remarks)
                         VALUES (%s, %s, CURRENT_DATE, %s)
                     """, (pr_number_final, employee_id, reason))
 
-                    # --- Insert detail (sesuai tabel terbaru, tanpa expected_date)
+                    # --- Insert detail
                     for item in st.session_state.pr_items:
                         item_id = master_items.get(item["Description"])
                         vendor_id = master_vendors.get(item["Vendor Recomendation"])
@@ -673,23 +717,27 @@ elif st.session_state.active_page == "Purchase Request":
 
                         run_exec("""
                             INSERT INTO procwh.t_pr_detail
-                            (pr_id, item_id, description, qty_request, uom_id, unit_price, total_amour, vendor_id)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            (pr_id, item_id, description, qty_requested, uom_id, unit_price, total_amount, vendor_id, created_at)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
                         """, (
                             pr_number_final, item_id, item["Description"], item["Qty"], item["UOM"],
                             item["Unit Price (Est)"], item["Total Price (Est)"], vendor_id
                         ))
-
 
                     if failed_items:
                         st.warning(f"⚠️ Item gagal submit (tidak ada master data): {', '.join(failed_items)}")
 
                     st.success(f"🎉 PR {pr_number_final} berhasil diajukan dengan {len(st.session_state.pr_items) - len(failed_items)} item.")
                     st.balloons()
+                    # reset state
                     st.session_state.pr_items = []
-                    st.rerun()
+                    st.session_state.current_pr = None
+                    st.experimental_rerun()
                 else:
                     st.error("Lengkapi semua data header PR.")
+    else:
+        st.info("Belum ada item di PR. Tambahkan item setelah membuat PR header.")
+
 
 elif st.session_state.active_page == "PR Approval":
     ui_pr_approval()
