@@ -599,7 +599,7 @@ elif st.session_state.active_page == "Purchase Request":
                     new_pr = list(res[0].values())[0]
                 st.session_state.current_pr = new_pr
                 st.success(f"Nomor PR berhasil dibuat: **{new_pr}**")
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("Gagal generate PR ID. Cek koneksi atau fungsi DB procwh.fn_next_pr_id().")
 
@@ -647,7 +647,7 @@ elif st.session_state.active_page == "Purchase Request":
                         "Vendor Recomendation": vendor
                     })
                     st.success(f"✅ Item '{description}' ditambahkan ke PR No. {st.session_state.current_pr}")
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error("Lengkapi semua kolom bertanda *.")
 
@@ -675,7 +675,7 @@ elif st.session_state.active_page == "Purchase Request":
             with col9:
                 if st.button("❌", key=f"del_{i}"):
                     st.session_state.pr_items.pop(i)
-                    st.experimental_rerun()
+                    st.rerun()
 
         st.subheader(f"💰 Grand Total Estimasi: Rp {total_all:,.0f}")
         st.markdown("---")
@@ -732,7 +732,7 @@ elif st.session_state.active_page == "Purchase Request":
                     # reset state
                     st.session_state.pr_items = []
                     st.session_state.current_pr = None
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error("Lengkapi semua data header PR.")
     else:
