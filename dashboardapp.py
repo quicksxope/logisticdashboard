@@ -18,18 +18,15 @@ from db_utils import run_query, run_exec
 # ========== PAGE CONFIG ==========
 st.set_page_config(page_title="Sistem Logistik Tambak Udang", layout="wide")
 
-# ========== DUMMY DATA (Data Tambahan untuk PR yang Disetujui) ==========
-# Master Item
 master_items = run_query("SELECT item_id, name, base_uom_id FROM procwh.m_item")
 st.session_state.master_items = master_items
 
-# Master Supplier
 master_vendors = run_query("SELECT vendor_id, name FROM procwh.m_vendor")
-st.session_state.master_suppliers = [s[1] for s in master_vendors]
+st.session_state.master_suppliers = [s["name"] for s in master_vendors]
 
-# Master Category
 master_categories = run_query("SELECT category_id, name FROM procwh.m_category")
-st.session_state.master_categories = [c[1] for c in master_categories]
+st.session_state.master_categories = [c["name"] for c in master_categories]
+
 
 
 # ========== CUSTOM STYLE (Disesuaikan untuk st.radio) ==========
