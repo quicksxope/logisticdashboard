@@ -235,7 +235,7 @@ def ui_pr_approval():
     df_pr = pd.DataFrame(run_query("""
         SELECT pr_id, pr_date, status, remarks
         FROM procwh.t_pr_header
-        WHERE status IN ('SUBMITTED','REVIEWED')
+        WHERE status IN ('SUBMITTED','REVIEWED','DRAFT')
         ORDER BY pr_date DESC
     """))
 
