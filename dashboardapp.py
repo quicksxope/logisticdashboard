@@ -39,6 +39,7 @@ menu_items = {
     "PR Approval": "✔️ Approval PR",
     "Purchase Order": "📄 Purchase Order",
     "PO Approval": "🛂 Approval PO",
+    "Forecast": "📅 Forecast Bulanan",
     "Goods Receipt": "📦 GR / Barang Masuk",
     "Stock Movement": "📜 Stock Movement",
     "Setting": "⚙️ Setting"
@@ -306,6 +307,151 @@ def ui_po_approval():
 
             st.success(f"PO {selected} berhasil {action}")
             st.rerun()
+
+
+def ui_forecast():
+    st.title("📅 Input Forecast Bulanan")
+
+    # --- Load master data ---
+    master_items = {row[1]: row[0] for row in run_query("SELECT item_id, name FROM procwh.m_item")}
+    master_uom = {row[1]: row[0] for row in run_query("SELECT uom_id, name FROM procwh.m_uom")}
+    master_department = {row[1]: row[0] for row in run_query("SELECT department_id, name FROM procwh.m_department")}
+    master_employee = {row[1]: row[0] for row in run_query("SELECT employee_id, name FROM procwh.m_employee")}
+
+    st.session_state.master_items = list(master_items.keys())
+    st.session_state.master_uom = list(master_uom.keys())
+    st.session_state.master_department = list(master_department.keys())
+    st.session_state.master_employee = list(master_employee.keys())
+
+    # Init detail list
+    if "forecast_details" not in st.session_state:
+        st.session_state.forecast_details = []
+
+    # =========================
+    # 1. INPUT FORECAST HEADER
+    # =========================
+    st.subheader("📌 Forecast Header")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        department_name = st.selectbox("Departemen*", ["(Pilih Departemen)"] + st.session_state.master_department)
+        submitted_by_name = st.selectbox("Dibuat Oleh*", ["(Pilih Employee)"] + st.session_state.master_employee)
+
+    with col2:
+        month_year = st.date_input("Bulan Forecast*", format="YYYY-MM-DD")
+        remarks = st.text_area("Keterangan (Opsional)")
+
+    # Auto-generate forecast_id
+    generate_id_btn = st.button("🔄 Generate Forecast ID")
+
+    if generate_id_btn:
+        new_id = run_query("SELECT procwh.fn_next_forecast_id()")[0]["fn_next_forecast_id"]
+        st.session_state.current_forecast_id = new_id
+        st.success(f"Forecast ID berhasil dibuat: {new_id}")
+
+    # ID yang akan digunakan
+    forecast_id = st.session_state.get("current_forecast_id", "")
+
+    if forecast_id:
+        st.info(f"Forecast ID Aktif: **{forecast_id}**")
+
+    st.markdown("---")
+
+    # =========================
+    # 2. INPUT FORECAST DETAIL
+    # =========================
+    st.subheader("📦 Tambah Barang Forecast")
+
+    with st.form("form_add_forecast_detail", clear_on_submit=True):
+        colA, colB, colC = st.columns([3, 2, 2])
+
+        with colA:
+            item_name = st.selectbox("Nama Barang*", ["(Pilih Item)"] + st.session_state.master_items)
+        with colB:
+            qty = st.number_input("Qty Forecast*", min_value=1.0, value=1.0)
+        with colC:
+            uom_name = st.selectbox("UOM*", ["(Pilih UOM)"] + st.session_state.master_uom)
+
+        notes = st.text_input("Catatan (Opsional)")
+
+        submitted_detail = st.form_submit_button("➕ Tambah ke Forecast")
+
+    if submitted_detail:
+        if item_name != "(Pilih Item)" and uom_name != "(Pilih UOM)":
+            st.session_state.forecast_details.append({
+                "item": item_name,
+                "item_id": master_items[item_name],
+                "qty": qty,
+                "uom": uom_name,
+                "uom_id": master_uom[uom_name],
+                "notes": notes
+            })
+            st.success("Item forecast ditambahkan.")
+            st.rerun()
+        else:
+            st.error("Semua kolom wajib diisi.")
+
+    # =========================
+    # 3. TABEL FORECAST DETAIL
+    # =========================
+    if st.session_state.forecast_details:
+        st.markdown("### 📋 Daftar Barang di Forecast")
+        df = pd.DataFrame(st.session_state.forecast_details)
+        st.dataframe(df, hide_index=True, use_container_width=True)
+
+    st.markdown("---")
+
+    # =========================
+    # 4. SUBMIT FORECAST KE DATABASE
+    # =========================
+    if st.button("📤 Submit Forecast ke Database"):
+        if not forecast_id:
+            st.error("Klik tombol *Generate Forecast ID* terlebih dahulu.")
+            return
+
+        if department_name == "(Pilih Departemen)" or submitted_by_name == "(Pilih Employee)":
+            st.error("Lengkapi header terlebih dahulu.")
+            return
+
+        if not st.session_state.forecast_details:
+            st.error("Minimal 1 barang harus dimasukkan.")
+            return
+
+        # Insert header
+        run_exec("""
+            INSERT INTO procwh.t_forecast_header
+            (forecast_id, department_id, month_year, submitted_by, remarks)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (
+            forecast_id,
+            master_department[department_name],
+            month_year,
+            master_employee[submitted_by_name],
+            remarks
+        ))
+
+        # Insert details
+        for item in st.session_state.forecast_details:
+            run_exec("""
+                INSERT INTO procwh.t_forecast_detail
+                (forecast_id, item_id, qty_forecast, uom_id, notes)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (
+                forecast_id,
+                item["item_id"],
+                item["qty"],
+                item["uom_id"],
+                item["notes"]
+            ))
+
+        st.success(f"🎉 Forecast {forecast_id} berhasil disimpan!")
+        st.balloons()
+
+        # Reset state
+        st.session_state.forecast_details = []
+        st.session_state.current_forecast_id = None
+        st.rerun()
+
 def ui_gr():
     st.title("📦 Goods Receipt (GR)")
 
@@ -764,6 +910,10 @@ elif st.session_state.active_page == "Goods Receipt":
 
 elif st.session_state.active_page == "Stock Movement":
     ui_stock_movement()
+
+elif st.session_state.active_page == "Forecast":
+    ui_forecast()
+
 
 # ===============================================
 # ========== HALAMAN PURCHASE ORDER (MODIFIED) ==========
