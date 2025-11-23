@@ -272,7 +272,7 @@ def ui_po_approval():
     df_po = pd.DataFrame(run_query("""
         SELECT po_id, vendor_id, status
         FROM procwh.t_po_header
-        WHERE status IN ('DRAFT', 'APPROVED', 'FULLY_RECEIVED')
+        WHERE status IN ('DRAFT')
         ORDER BY created_at DESC
     """))
 
