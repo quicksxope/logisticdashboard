@@ -272,7 +272,7 @@ def ui_po_approval():
     df_po = pd.DataFrame(run_query("""
         SELECT po_id, vendor_id, status
         FROM procwh.t_po_header
-        WHERE status IN ('DRAFT','REVIEWED','VERIFIED')
+        WHERE status IN ('DRAFT', 'APPROVED', 'FULLY_RECEIVED')
         ORDER BY created_at DESC
     """))
 
@@ -289,7 +289,7 @@ def ui_po_approval():
         row = df_po[df_po["po_id"] == selected].iloc[0]
         status = row["status"]
 
-        map_level = {"DRAFT": 1, "REVIEWED": 2, "VERIFIED": 3}
+        map_level = {"DRAFT": 1, 'APPROVED': 2, 'FULLY_RECEIVED': 3}
         next_level = map_level[status]
 
         st.info(f"Approval Level berikutnya: **{next_level}**")
